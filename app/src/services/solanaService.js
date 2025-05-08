@@ -7,7 +7,9 @@ import {
   createNft,
   mplTokenMetadata,
   findMetadataPda,
-  TokenStandard
+  TokenStandard,
+  printSupply,
+  mintV1
 } from '@metaplex-foundation/mpl-token-metadata';
 import { initWallet } from './walletService';
 import { uploadFileToIPFS, uploadJsonToIPFS } from './pinataService';
@@ -49,6 +51,7 @@ export const createNFTWithMetaplex = async (name, description, image, attributes
     }
     
     // 5. Create a new mint signer
+    
     const mint = generateSigner(umi);
     console.log('DEBUG: maxSupply for createNft:', maxSupply);
     console.log('DEBUG: TokenStandard:', TokenStandard.Fungible);
@@ -59,7 +62,7 @@ export const createNFTWithMetaplex = async (name, description, image, attributes
       uri: metadataUploadResult.metadataUrl,
       sellerFeeBasisPoints: 500, // 5%
       tokenStandard: TokenStandard.Fungible,
-      maxSupply: maxSupply, // Set maxSupply if greater than 1
+      printSupply: printSupply('Limited',[100]), // Set maxSupply if greater than 1
     }).sendAndConfirm(umi);
     
     // 7. Return the result
@@ -80,6 +83,20 @@ export const createNFTWithMetaplex = async (name, description, image, attributes
     };
   }
 };
+
+// export const mintNft = async (name, description, image, attributes, maxSupply = 1) => {
+//   try {
+//     // 1. Connect to wallet
+//     const { umi } = await initWallet();
+//     umi.use(mplTokenMetadata());
+//     const mint = await mintV1(umi, {
+//   mint: '8ZxnxJNEtPncrSeWCPreEULpnCMBcy2dD2QmozbFUbQs',
+//   authority,
+//   amount: 1,
+//   tokenOwner,
+//   tokenStandard: TokenStandard.NonFungible,
+// }).sendAndConfirm(umi)
+// };
 
 export const fetchNFTsForWallet = async (walletAddress) => {
   try {

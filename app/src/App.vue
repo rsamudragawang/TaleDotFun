@@ -1,4 +1,4 @@
-<!-- <template>
+<template>
   <div class="min-h-screen bg-gray-100">
     <header class="bg-white shadow">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -53,7 +53,7 @@ export default {
     WalletConnect,
   },
 };
-</script> -->
+</script>
 
 
 <!-- <template>
@@ -109,7 +109,7 @@ export default {
 };
 </script> -->
 
-<script>
+<!-- <script>
 import MintEdition from './components/CandyMachineCreator.vue';
 export default {
   name: 'App',
@@ -120,4 +120,4 @@ export default {
 </script>
 <template>
   <MintEdition />
-</template>
+</template> -->
