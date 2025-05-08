@@ -133,7 +133,7 @@ import { walletAdapterIdentity } from '@metaplex-foundation/umi-signer-wallet-ad
 import {
     mplCandyMachine,
     create,
-    insertItems,
+    addConfigLines,
     CandyMachine,
     CandyGuard,
     ConfigLine,
@@ -150,6 +150,7 @@ import {
     publicKey as umiPublicKeyUtil, // UMI's utility to create a PublicKey
     Signer,
     none,
+    publicKey,
 } from '@metaplex-foundation/umi';
 import { setComputeUnitLimit, setComputeUnitPrice } from '@metaplex-foundation/mpl-toolbox';
 import { base58 } from '@metaplex-foundation/umi/serializers';
@@ -157,7 +158,7 @@ import { createCollection } from '@metaplex-foundation/mpl-core'
 import { initWallet } from '../services/walletService';
 
 // Using @solana/web3.js's PublicKey for type annotation from useWallet if needed, but mostly dealing with UMI's PublicKey
-import { PublicKey as SolanaWeb3JsPublicKey } from '@solana/web3.js';
+import { PublicKey, PublicKey as SolanaWeb3JsPublicKey } from '@solana/web3.js';
 
 const RPC_ENDPOINT = import.meta.env.VITE_RPC_ENDPOINT || 'https://api.devnet.solana.com';
 const WALLET_PLACEHOLDER = "YOUR_WALLET_ADDRESS_PLACEHOLDER";
@@ -284,89 +285,127 @@ async function handleCreateCandyMachine() {
 
   try {
     // 0. Prepare Creators from JSON input
-    let parsedUmiCreators: { address: UmiPublicKey; verified: boolean; share: number }[] | null = null;
-    try {
-        parsedUmiCreators = JSON.parse(cmConfig.value.creatorsJson).map((c: any) => ({
-            address: umiPublicKeyUtil(c.address), // Convert base58 string to UMI PublicKey
-            verified: c.verified !== undefined ? c.verified : false,
-            share: c.share,
-        }));
-        if (!parsedUmiCreators || parsedUmiCreators.length === 0) {
-            throw new Error("Creators array cannot be empty.");
-        }
-    } catch (e: any) {
-        throw new Error(`Invalid JSON format or content for creators: ${e.message}`);
-    }
+    // let parsedUmiCreators: { address: UmiPublicKey; verified: boolean; share: number }[] | null = null;
+    // try {
+    //     parsedUmiCreators = JSON.parse(cmConfig.value.creatorsJson).map((c: any) => ({
+    //         address: umiPublicKeyUtil(c.address), // Convert base58 string to UMI PublicKey
+    //         verified: c.verified !== undefined ? c.verified : false,
+    //         share: c.share,
+    //     }));
+    //     if (!parsedUmiCreators || parsedUmiCreators.length === 0) {
+    //         throw new Error("Creators array cannot be empty.");
+    //     }
+    // } catch (e: any) {
+    //     throw new Error(`Invalid JSON format or content for creators: ${e.message}`);
+    // }
 
-    // 1. Create Collection NFT
-    const collectionMintSigner: Signer = generateSigner(umi); // UMI Signer
-    console.log("Creating collection NFT...");
-    // console.log(u.identity,umi)
-    const createCollectionBuilder = createCollection(umi, {
-  collection: collectionMintSigner,
-  name: 'My Collection',
-  uri: 'https://example.com/my-collection.json',
-}).sendAndConfirm(umi)
-console.log(createCollectionBuilder)
-    // const createCollectionResult = await createCollectionBuilder.sendAndConfirm(u, { confirm: { commitment: 'processed' } });
-    // createdCollectionId.value = collectionMintSigner.publicKey.toString(); // UMI PublicKey .toString() is base58
-    // transactionSignature.value = base58.deserialize(createCollectionResult.signature)[0];
-    // console.log('Collection NFT created:', createdCollectionId.value, "TX:", transactionSignature.value);
+    // // 1. Create Collection NFT
+    // const collectionUpdateAuthority = generateSigner(umi)
+    // const collectionMint = generateSigner(umi)
+    // console.log("Creating collection NFT...");
+    // // console.log(u.identity,umi)
+    // const createCollectionBuilder = await createNft(umi, {
+    //   mint: collectionMint,
+    //   authority: umi.identity,
+    //   name: collectionConfig.value.name,
+    //   uri: collectionConfig.value.uri,
+    //   sellerFeeBasisPoints: percentAmount(9.99, 2), // 9.99%
+    //   isCollection: true,
+    // }).sendAndConfirm(umi)
+    // const candyMachineSettings = {
+    //   collectionMint: collectionMint.publicKey,
+    //   collectionUpdateAuthority,
+    //   itemsAvailable: cmConfig.value.itemsAvailable,
+    // }
+    // // const createCollectionResult = await createCollectionBuilder.sendAndConfirm(u, { confirm: { commitment: 'processed' } });
+    // // createdCollectionId.value = collectionMintSigner.publicKey.toString(); // UMI PublicKey .toString() is base58
+    // // transactionSignature.value = base58.deserialize(createCollectionResult.signature)[0];
+    // // console.log('Collection NFT created:', createdCollectionId.value, "TX:", transactionSignature.value);
     // successMessage.value = `Collection NFT created: ${createdCollectionId.value}. `;
 
-    // 2. Prepare Candy Guard settings
-    const candyGuardSigner: Signer = generateSigner(umi);
-    const guardsToSet: any = {
-        // Default Bot Tax: Good practice to include, even if 0.
-        botTax: some({ lamports: sol(0.01), lastInstruction: true }), // Example: 0.01 SOL bot tax
-    };
-    if (guardConfig.value.solPayment.amount > 0) {
-      const solPaymentDestinationString = guardConfig.value.solPayment.destination || u.identity.publicKey.toString();
-      guardsToSet.solPayment = some({
-        lamports: sol(guardConfig.value.solPayment.amount),
-        destination: umiPublicKeyUtil(solPaymentDestinationString), // Convert base58 string to UMI PublicKey
-      });
-    }
-    if (guardConfig.value.startDate) {
-      try {
-        guardsToSet.startDate = some({ date: dateTime(new Date(guardConfig.value.startDate).getTime() / 1000) });
-      } catch (e) { console.warn("Invalid start date format, skipping.")}
-    }
-    if (guardConfig.value.endDate) {
-      try {
-        guardsToSet.endDate = some({ date: dateTime(new Date(guardConfig.value.endDate).getTime() / 1000) });
-      } catch (e) { console.warn("Invalid end date format, skipping.")}
-    }
+    // // 2. Prepare Candy Guard settings
+    // const candyGuardSigner: Signer = generateSigner(umi);
+    // const guardsToSet: any = {
+    //     // Default Bot Tax: Good practice to include, even if 0.
+    //     botTax: some({ lamports: sol(0.01), lastInstruction: true }), // Example: 0.01 SOL bot tax
+    // };
+    // if (guardConfig.value.solPayment.amount > 0) {
+    //   const solPaymentDestinationString = guardConfig.value.solPayment.destination || u.identity.publicKey.toString();
+    //   guardsToSet.solPayment = some({
+    //     lamports: sol(guardConfig.value.solPayment.amount),
+    //     destination: umiPublicKeyUtil(solPaymentDestinationString), // Convert base58 string to UMI PublicKey
+    //   });
+    // }
+    // if (guardConfig.value.startDate) {
+    //   try {
+    //     guardsToSet.startDate = some({ date: dateTime(new Date(guardConfig.value.startDate).getTime() / 1000) });
+    //   } catch (e) { console.warn("Invalid start date format, skipping.")}
+    // }
+    // if (guardConfig.value.endDate) {
+    //   try {
+    //     guardsToSet.endDate = some({ date: dateTime(new Date(guardConfig.value.endDate).getTime() / 1000) });
+    //   } catch (e) { console.warn("Invalid end date format, skipping.")}
+    // }
 
-    // 3. Create Candy Machine (and its Candy Guard)
-    const candyMachineSigner: Signer = generateSigner(umi);
-    console.log("Creating Candy Machine with guard...");
+    // // 3. Create Candy Machine (and its Candy Guard)
+    //  await new Promise(resolve => setTimeout(resolve, 10000)); // Add this to make sure the createNft was completed.
+    // const candyMachineSigner: Signer = generateSigner(umi);
+    // console.log("Creating Candy Machine with guard...");
 
-    const createCmBuilder = create(u, {
-      candyMachine: candyMachineSigner,
-      collectionMint: collectionMintSigner.publicKey, // UMI PublicKey
-      collectionUpdateAuthority: u.identity, // UMI Signer
-      tokenStandard: cmConfig.value.tokenStandard, // UMI's TokenStandard enum value
-      sellerFeeBasisPoints: percentAmount(cmConfig.value.sellerFeeBasisPoints / 100, 2),
-      itemsAvailable: BigInt(cmConfig.value.itemsAvailable),
-      authority: u.identity, // UMI Signer
-      isMutable: cmConfig.value.isMutable,
-      symbol: cmConfig.value.symbol,
-      maxEditionSupply: BigInt(cmConfig.value.maxEditionSupply),
-      creators: some(parsedUmiCreators),
-      candyGuard: candyGuardSigner,
-      guards: guardsToSet,
-    }).add(
-        setComputeUnitLimit(u, { units: 800_000 })
-    );
-    const createCmResult = await createCmBuilder.sendAndConfirm(u, { confirm: { commitment: 'processed' } });
-    createdCandyMachineId.value = candyMachineSigner.publicKey.toString();
-    transactionSignature.value = base58.deserialize(createCmResult.signature)[0];
-    console.log('Candy Machine created:', createdCandyMachineId.value, "TX:", transactionSignature.value);
-    successMessage.value += `Candy Machine created: ${createdCandyMachineId.value}. `;
+    // const candyMachine = generateSigner(umi)
+    // console.log({
+    //   candyMachine,
+    //   collectionMint: collectionMint.publicKey,
+    //   collectionUpdateAuthority: umi.identity,
+    //   tokenStandard: TokenStandard.NonFungible,
+    //   sellerFeeBasisPoints: percentAmount(9.99, 2), // 9.99%
+    //   itemsAvailable: 5000,
+    //   guards: guardsToSet,
+    //   creators: [
+    //     {
+    //       address: umi.identity.publicKey,
+    //       verified: true,
+    //       percentageShare: 100,
+    //     },
+    //   ],
+    //   configLineSettings: some({
+    //     prefixName: cmConfig.value.symbol,
+    //     nameLength: 32,
+    //     prefixUri: 'https://example.com/nft',
+    //     uriLength: 200,
+    //     isSequential: false,
+    //   }),
+    // })
+    // const createCandyMachine = await create(umi, {
+    //   candyMachine,
+    //   collectionMint: collectionMint.publicKey,
+    //   collectionUpdateAuthority: umi.identity,
+    //   tokenStandard: TokenStandard.NonFungible,
+    //   sellerFeeBasisPoints: percentAmount(9.99, 2), // 9.99%
+    //   itemsAvailable: 5000,
+    //   guards: guardsToSet,
+    //   creators: [
+    //     {
+    //       address: umi.identity.publicKey,
+    //       verified: true,
+    //       percentageShare: 100,
+    //     },
+    //   ],
+    //   configLineSettings: some({
+    //     prefixName:'',
+    //     nameLength: 32,
+    //     prefixUri: 'https://example.com/nft',
+    //     uriLength: 50,
+    //     isSequential: false,
+    //   }),
+    // }).then(tx => tx.sendAndConfirm(umi, { confirm: { commitment: 'processed' } })).then(r => r.name);
+    // console.log(createCandyMachine,candyMachine)
+    // console.log('Candy Machine created:', createdCandyMachineId.value, "TX:", transactionSignature.value);
+    // successMessage.value += `Candy Machine created: ${createCandyMachine}. `;
 
     // 4. Insert Items into Candy Machine
     console.log("Inserting items into Candy Machine...");
+    // await new Promise(resolve => setTimeout(resolve, 10000)); // Add this to make sure the createNft was completed.
     const configLines: ConfigLine[] = items.value.map(item => ({
       name: item.name,
       uri: item.uri,
@@ -375,16 +414,15 @@ console.log(createCollectionBuilder)
     const CHUNK_SIZE = 10;
     for (let i = 0; i < configLines.length; i += CHUNK_SIZE) {
         const chunk = configLines.slice(i, i + CHUNK_SIZE);
-        const insertBuilder = insertItems(u, {
-            candyMachine: candyMachineSigner.publicKey,
-            authority: u.identity,
-            items: chunk,
-            candyGuard: candyGuardSigner.publicKey, // Specify the guard
-            index: BigInt(i),
+        const insertBuilder = addConfigLines(umi, {
+            candyMachine: publicKey('F3LREwVCB97fq9wZCgh41fuDn9a3QpuUFPt3Qzsm3VvK'),
+            authority: umi.identity,
+            configLines: chunk,
+            index: Number(i),
         }).add(
-            setComputeUnitLimit(u, { units: 200_000 + (300_000 * chunk.length) }) // Rough estimate
+            setComputeUnitLimit(umi, { units: 200_000 + (300_000 * chunk.length) }) // Rough estimate
         );
-        const insertResult = await insertBuilder.sendAndConfirm(u, { confirm: { commitment: 'processed' } });
+        const insertResult = await insertBuilder.sendAndConfirm(umi, { confirm: { commitment: 'processed' } });
         transactionSignature.value = base58.deserialize(insertResult.signature)[0];
         console.log(`Inserted items ${i + 1}-${i + chunk.length}. TX: ${transactionSignature.value}`);
     }

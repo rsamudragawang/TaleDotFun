@@ -15,9 +15,7 @@ export const initWallet = async () => {
       await phantomWallet.connect();
       
       // Initialize UMI with the wallet
-      const endpoint = process.env.VUE_APP_SOLANA_NETWORK === 'mainnet' 
-        ? 'https://api.mainnet-beta.solana.com'
-        : 'https://api.devnet.solana.com';
+      const endpoint =  'https://devnet.helius-rpc.com/?api-key=22e6bec9-fb29-4b91-a2b4-6122b40203f6';
       
       umi = createUmi(endpoint)
         .use(walletAdapterIdentity(phantomWallet));
@@ -59,4 +57,14 @@ export const getWalletInfo = () => {
     };
   }
   return { connected: false };
+};
+
+// Helper function to shorten public key for display
+export const shortenAddress = (address, chars = 4) => {
+  return `${address.slice(0, chars)}...${address.slice(-chars)}`;
+};
+
+// Get network explorer URL (for transaction links)
+export const getExplorerUrl = (signature, cluster = 'devnet') => {
+  return `https://explorer.solana.com/tx/${signature}?cluster=${cluster}`;
 };

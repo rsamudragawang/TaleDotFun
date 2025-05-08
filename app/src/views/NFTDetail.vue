@@ -99,24 +99,8 @@
 <script>
 import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
-import { getAllNFTs } from '../services/solanaService';
-import { getWalletInfo,initWallet } from '../services/walletService';
-import { 
-  createNft,
-  mplTokenMetadata,
-  findMetadataPda,
-  TokenStandard,
-  printSupply,
-  mintV1
-} from '@metaplex-foundation/mpl-token-metadata';
-// import { initWallet } from '..';
-import { 
-  createSignerFromKeypair,
-  generateSigner,
-  publicKey,
-} from '@metaplex-foundation/umi';
-import { mintV1, TokenStandard, createSignerFromKeypair } from '@metaplex-foundation/mpl-token-metadata';
-import {  Umi } from '@metaplex-foundation/umi'; // Or however you get your Umi instance and Signer
+import { getAllNFTs,mintPrintEdition } from '../services/solanaService';
+import { getWalletInfo } from '../services/walletService';
 export default {
   name: 'NFTDetail',
   setup() {
@@ -162,20 +146,11 @@ export default {
         alert('Please connect your wallet first');
         return;
       }
-      console.log(nft)
-          const { umi } = await initWallet();
-    umi.use(mplTokenMetadata());
-    const mint = generateSigner(umi);
-    const minting = await mintV1(umi, {
-  mint,
-  authority:umi.identity,
-  amount: 1,
-  tokenOwner: umi.identity.publicKey,
-  tokenStandard: TokenStandard.Fungible,
-}).sendAndConfirm(umi)
-console.log(mint)
+      const walletInfo = getWalletInfo();
+      
+      mintPrintEdition('EbuGRZeM8anAp6bryvGLbaKeV1gtEka2UQ2jzhxk4iTw',walletInfo.publicKey)
       // In a real application, this would trigger a purchase transaction
-      alert(`Buying NFT: ${JSON.parse(nft)}`);
+      // alert(`Buying NFT: ${JSON.parse(nft)}`);
     };
     
     const checkWalletConnection = () => {

@@ -9,7 +9,8 @@ import {
   findMetadataPda,
   TokenStandard,
   printSupply,
-  mintV1
+  printV1,
+  fetchMasterEditionFromSeeds
 } from '@metaplex-foundation/mpl-token-metadata';
 import { initWallet } from './walletService';
 import { uploadFileToIPFS, uploadJsonToIPFS } from './pinataService';
@@ -61,7 +62,7 @@ export const createNFTWithMetaplex = async (name, description, image, attributes
       name,
       uri: metadataUploadResult.metadataUrl,
       sellerFeeBasisPoints: 500, // 5%
-      tokenStandard: TokenStandard.Fungible,
+      tokenStandard: TokenStandard.NonFungible,
       printSupply: printSupply('Limited',[100]), // Set maxSupply if greater than 1
     }).sendAndConfirm(umi);
     
@@ -84,19 +85,97 @@ export const createNFTWithMetaplex = async (name, description, image, attributes
   }
 };
 
-// export const mintNft = async (name, description, image, attributes, maxSupply = 1) => {
-//   try {
-//     // 1. Connect to wallet
-//     const { umi } = await initWallet();
-//     umi.use(mplTokenMetadata());
-//     const mint = await mintV1(umi, {
-//   mint: '8ZxnxJNEtPncrSeWCPreEULpnCMBcy2dD2QmozbFUbQs',
-//   authority,
-//   amount: 1,
-//   tokenOwner,
-//   tokenStandard: TokenStandard.NonFungible,
-// }).sendAndConfirm(umi)
-// };
+export const mintPrintEdition = async (
+  masterNftMintAddressStr, // Mint address of the Master Edition NFT
+  recipientPublicKeyStr   // Optional: Wallet to receive the print. Defaults to umi.identity.
+) => {
+  try {
+    const { umi } = await initWallet();
+    // const umi = {} as any; // Replace with your actual Umi initialization
+
+    const masterMintPublicKey = publicKey(masterNftMintAddressStr);
+    const recipientPublicKey = recipientPublicKeyStr ? publicKey(recipientPublicKeyStr) : umi.identity.publicKey;
+
+    // 1. Fetch the Master Edition NFT's details to verify and get current supply.
+    // fetchDigitalAsset is robust for this.
+    console.log(`Fetching Master NFT details for mint: ${masterMintPublicKey.toString()}`);
+    const masterNft = await fetchDigitalAsset(umi, masterMintPublicKey);
+
+    if (!masterNft || !masterNft.edition || masterNft.edition.type !== 'MasterEditionV2') { // Check type
+      throw new Error(`The provided mint ${masterNftMintAddressStr} is not a valid Master Edition NFT.`);
+    }
+
+    // Check if more prints can be made
+    const currentSupply = masterNft.edition.supply;
+    const maxSupply = masterNft.edition.maxSupply; // This is a bigint or null
+
+    if (maxSupply !== null && currentSupply >= maxSupply) {
+      throw new Error(`No more prints can be minted. Max supply of ${maxSupply?.toString()} reached.`);
+    }
+    console.log(`Master Edition: ${masterNft.metadata.name}, Current Supply: ${currentSupply}, Max Supply: ${maxSupply?.toString() ?? 'Unlimited'}`);
+
+    // 2. The printNewEdition operation will generate a new mint for the print.
+    // It implicitly uses umi.identity as the payer and often as the authority for the new print.
+    const printArgs = {
+      originalMint: masterMintPublicKey,
+      // newMint: generateSigner(umi), // printNewEdition can generate this if not provided
+      newOwner: recipientPublicKey,
+      // newUpdateAuthority: recipientPublicKey, // Defaults to newOwner if not set
+      // masterTokenAccountOwner: umi.identity.publicKey, // Only if master token not owned by umi.identity AND not a PDA
+      // masterTokenAccount: some_token_account_pda, // If master token is in a specific PDA
+    };
+
+    console.log('Building printNewEdition transaction...');
+    const printBuilder = printNewEdition(umi, printArgs);
+
+    // 3. Send and confirm the transaction
+    const { signature, result } = await printBuilder.sendAndConfirm(umi, {
+      confirm: { commitment: 'confirmed' },
+    });
+
+    if (result.value.err) {
+      console.error("Print transaction failed:", result.value.err);
+      console.error("Solana Logs:", result.value.logs);
+      throw new Error(`Print Edition minting transaction failed: ${JSON.stringify(result.value.err)}`);
+    }
+
+    // The new print's mint address can be derived if you provided `newMint` Signer,
+    // or you might need to parse logs or fetch based on owner if not.
+    // However, printNewEdition's builder often has ways to get this, or you can fetch it after.
+    // For now, we'll assume the user can find it via their wallet and the signature.
+    // A more robust way is to pass `newMint: printMintSigner` to printNewEdition
+    // and then `printMintSigner.publicKey` is your new mint. Let's adjust for that:
+
+    const printMintSigner = generateSigner(umi); // Generate it beforehand
+    const refinedPrintArgs = {
+      ...printArgs,
+      newMint: printMintSigner,
+    };
+    const refinedPrintBuilder = printNewEdition(umi, refinedPrintArgs);
+    const { signature: refinedSignature, result: refinedResult } = await refinedPrintBuilder.sendAndConfirm(umi, {
+        confirm: { commitment: 'confirmed' },
+    });
+     if (refinedResult.value.err) throw new Error("Print tx failed again");
+
+
+    console.log('Print Edition Minted Successfully. Signature:', new TextDecoder().decode(refinedSignature));
+    console.log('New Print Edition Mint Address:', printMintSigner.publicKey.toString());
+
+
+    return {
+      success: true,
+      printMint: printMintSigner.publicKey,
+      signature: refinedSignature,
+    };
+
+  } catch (error) {
+    console.error('Error minting Print Edition:', error);
+    // return {
+    //   success: false,
+    //   error: error.message || error.toString(),
+    // };
+  }
+};
 
 export const fetchNFTsForWallet = async (walletAddress) => {
   try {
