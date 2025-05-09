@@ -15,7 +15,7 @@ export const initWallet = async () => {
       await phantomWallet.connect();
       
       // Initialize UMI with the wallet
-      const endpoint =  'https://devnet.helius-rpc.com/?api-key=22e6bec9-fb29-4b91-a2b4-6122b40203f6';
+      const endpoint =  'https://api.devnet.solana.com';
       
       umi = createUmi(endpoint)
         .use(walletAdapterIdentity(phantomWallet));

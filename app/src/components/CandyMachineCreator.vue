@@ -12,23 +12,47 @@
     <form @submit.prevent="handleCreateCandyMachine" v-if="wallet.connected.value">
       <!-- Collection Details -->
       <fieldset>
-        <legend>1. Collection NFT Details</legend>
+        <legend>1. Collection NFT Details & Metadata</legend>
         <div>
-          <label for="collectionName">Collection Name:</label>
+          <label for="collectionName">Collection Name (for on-chain NFT & JSON):</label>
           <input type="text" id="collectionName" v-model="collectionConfig.name" required />
         </div>
         <div>
-          <label for="collectionSymbol">Collection Symbol:</label>
-          <input type="text" id="collectionSymbol" v-model="collectionConfig.symbol" required />
+          <label for="collectionSymbol">Collection Symbol (for on-chain NFT & JSON, optional in JSON):</label>
+          <input type="text" id="collectionSymbol" v-model="collectionConfig.symbol" />
         </div>
         <div>
-          <label for="collectionUri">Collection Metadata URI (Arweave/IPFS JSON):</label>
-          <input type="url" id="collectionUri" v-model="collectionConfig.uri" required />
-          <small>e.g., https://arweave.net/your-collection-metadata.json</small>
+          <label for="collectionDescription">Collection Description (for JSON):</label>
+          <textarea id="collectionDescription" v-model="collectionMetadataDetails.description" placeholder="Detailed description of your collection..."></textarea>
         </div>
         <div>
-          <label for="collectionSellerFee">Collection Seller Fee Basis Points (e.g., 500 for 5%):</label>
+            <label for="collectionImageFile">Collection Image/Logo (for JSON, upload preferred):</label>
+            <input type="file" id="collectionImageFile" @change="handleCollectionImageFileChange" accept="image/*" />
+            <small v-if="collectionMetadataDetails.imagePreviewUrl">Preview: <img :src="collectionMetadataDetails.imagePreviewUrl" alt="collection preview" class="image-preview" /></small>
+            <small v-if="collectionMetadataDetails.imageFile && !collectionMetadataDetails.imagePreviewUrl">File selected: {{ collectionMetadataDetails.imageFile.name }}</small>
+        </div>
+        <div>
+            <label for="collectionImageUrl">Or Collection Image/Logo URL (if not uploading file):</label>
+            <input type="url" id="collectionImageUrl" v-model="collectionMetadataDetails.imageUrl" placeholder="https://example.com/collection-logo.png" :disabled="!!collectionMetadataDetails.imageFile" />
+            <small v-if="collectionMetadataDetails.imageUrl && !collectionMetadataDetails.imageFile">Using URL: {{ collectionMetadataDetails.imageUrl }}</small>
+        </div>
+        <div>
+          <label for="collectionExternalUrl">Collection External URL (e.g., project website, for JSON):</label>
+          <input type="url" id="collectionExternalUrl" v-model="collectionMetadataDetails.external_url" placeholder="https://mycollection.com" />
+        </div>
+        <div>
+          <label for="collectionSellerFee">Collection Seller Fee Basis Points (for on-chain NFT & JSON, e.g., 500 for 5%):</label>
           <input type="number" id="collectionSellerFee" v-model.number="collectionConfig.sellerFeeBasisPoints" min="0" max="10000" required />
+        </div>
+        <div v-if="collectionConfig.uri">
+            <label>Generated Collection Metadata URI:</label>
+            <input type="text" :value="collectionConfig.uri" readonly disabled/>
+            <small>This URI will be used for the on-chain Collection NFT. It was generated from the details above.</small>
+        </div>
+         <div v-else>
+            <small class="alert alert-info" style="margin-top:10px;">
+                The Collection Metadata URI will be automatically generated and populated here when you submit the form.
+            </small>
         </div>
       </fieldset>
 
@@ -78,6 +102,11 @@
           <label for="solPaymentAmount">SOL Payment Amount (e.g., 0.1 for 0.1 SOL):</label>
           <input type="number" step="any" id="solPaymentAmount" v-model.number="guardConfig.solPayment.amount" min="0" />
         </div>
+        <div>
+          <label for="cmNamePrefix">NFT Name Prefix (for on-chain sequence, e.g., "My NFT #"):</label>
+          <input type="text" id="cmNamePrefix" v-model="cmConfig.namePrefix" placeholder="e.g., Cool NFT #" required />
+          <small>A sequential number will be auto-appended by the Candy Machine. Max {{ 32 - String(cmConfig.itemsAvailable).length -1 }} chars for prefix usually.</small>
+        </div>
           <div>
           <label for="solPaymentDestination">SOL Payment Destination (Base58 Address):</label>
           <input type="text" id="solPaymentDestination" v-model="guardConfig.solPayment.destination" />
@@ -94,15 +123,36 @@
       </fieldset>
 
       <!-- Items to Insert -->
-      <fieldset>
-        <legend>4. NFT Items (Name and URI)</legend>
-        <div v-for="(item, index) in items" :key="index" class="item-entry">
-          <input type="text" v-model="item.name" placeholder="NFT Name" required />
-          <input type="url" v-model="item.uri" placeholder="NFT Metadata URI (Arweave/IPFS)" required />
-          <button type="button" @click="removeItem(index)" class="remove-item-btn">-</button>
+     <fieldset>
+        <legend>4. Shared NFT Metadata (used for all {{ cmConfig.itemsAvailable }} items)</legend>
+        <div class="item-metadata-entry single-metadata-entry">
+          <!-- Name Prefix input removed from here -->
+          <div>
+            <label for="itemDescription">Description (shared by all NFTs):</label>
+            <textarea id="itemDescription" v-model="nftBaseMetadata.description" placeholder="Detailed description for all NFTs"></textarea>
+          </div>
+          <div>
+            <label for="itemImageFile">Image File (shared by all NFTs, upload preferred):</label>
+            <input type="file" id="itemImageFile" @change="handleImageFileChange" accept="image/*" />
+            <small v-if="nftBaseMetadata.imagePreviewUrl">Preview: <img :src="nftBaseMetadata.imagePreviewUrl" alt="preview" class="image-preview" /></small>
+            <small v-if="nftBaseMetadata.imageFile && !nftBaseMetadata.imagePreviewUrl">File selected: {{ nftBaseMetadata.imageFile.name }}</small>
+          </div>
+          <div>
+            <label for="itemImageUrl">Or Image URL (if not uploading file, shared by all NFTs):</label>
+            <input type="url" id="itemImageUrl" v-model="nftBaseMetadata.imageUrl" placeholder="https://example.com/image.png" :disabled="!!nftBaseMetadata.imageFile" />
+            <small v-if="nftBaseMetadata.imageUrl && !nftBaseMetadata.imageFile">Using URL: {{ nftBaseMetadata.imageUrl }}</small>
+          </div>
+
+          <fieldset class="attributes-fieldset">
+            <legend>Attributes (shared by all NFTs)</legend>
+            <div v-for="(attr, attrIndex) in nftBaseMetadata.attributes" :key="attrIndex" class="attribute-entry">
+              <input type="text" v-model="attr.trait_type" placeholder="Trait Type (e.g., Color)" />
+              <input type="text" v-model="attr.value" placeholder="Value (e.g., Red)" />
+              <button type="button" @click="removeAttribute(attrIndex)" class="remove-attribute-btn">-</button>
+            </div>
+            <button type="button" @click="addAttribute" class="add-attribute-btn">+ Add Attribute</button>
+          </fieldset>
         </div>
-        <button type="button" @click="addItem" class="add-item-btn">+</button>
-        <small>Ensure number of items matches "Total Items Available". URIs should point to individual NFT JSON metadata.</small>
       </fieldset>
 
       <button type="submit" :disabled="isLoading || !wallet.connected.value">
@@ -137,7 +187,7 @@ import {
     CandyMachine,
     CandyGuard,
     ConfigLine,
-    TokenStandard as UmiTokenStandard, // This is UMI's enum/type
+    // TokenStandard as UmiTokenStandard, // This is UMI's enum/type
 } from '@metaplex-foundation/mpl-candy-machine';
 import { createNft, TokenStandard } from '@metaplex-foundation/mpl-token-metadata'; // For collection
 import {
@@ -156,6 +206,7 @@ import { setComputeUnitLimit, setComputeUnitPrice } from '@metaplex-foundation/m
 import { base58 } from '@metaplex-foundation/umi/serializers';
 import { createCollection } from '@metaplex-foundation/mpl-core'
 import { initWallet } from '../services/walletService';
+import { uploadFileToIPFS, uploadJsonToIPFS } from '../services/pinataService';
 
 // Using @solana/web3.js's PublicKey for type annotation from useWallet if needed, but mostly dealing with UMI's PublicKey
 import { PublicKey, PublicKey as SolanaWeb3JsPublicKey } from '@solana/web3.js';
@@ -191,11 +242,23 @@ const collectionConfig = ref({
   sellerFeeBasisPoints: 500,
 });
 
+const collectionMetadataDetails = ref({
+    description: 'This is an amazing collection, automatically described!',
+    imageFile: null as File | null,
+    imagePreviewUrl: null as string | null,
+    imageUrl: '', // e.g., 'https://arweave.net/default_collection_logo.png'
+    external_url: '', // e.g., 'https://myproject.com'
+    // Attributes for collection can be added here if needed, similar to nftBaseMetadata.attributes
+});
+
+
+
 // Use UMI's TokenStandard for the select options, but store its value
 const UmiTokenStandardForSelect = TokenStandard; // Alias for template
 const cmConfig = ref({
   itemsAvailable: 1,
   sellerFeeBasisPoints: 500,
+  namePrefix: 'Sequential NFT #', // NEW: For configLineSettings.prefixName
   symbol: 'MACNFT',
   isMutable: true,
   tokenStandard: TokenStandard.ProgrammableNonFungible, // Default to pNFT (UMI's enum value)
@@ -212,6 +275,15 @@ const guardConfig = ref({
   endDate: '',
 });
 
+const nftBaseMetadata =ref({
+  description: 'This is one of many awesome sequential NFTs!',
+  imageFile: null,
+  imagePreviewUrl: null,
+  imageUrl: '',
+  attributes: [{ trait_type: 'Type', value: 'Sequential' }],
+  generatedJsonUri:''
+});
+
 interface Item {
   name: string;
   uri: string;
@@ -225,6 +297,37 @@ function removeItem(index: number) {
   items.value.splice(index, 1);
 }
 
+// --- NEW: Handle Collection Image File ---
+function handleCollectionImageFileChange(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0];
+  if (file) {
+    collectionMetadataDetails.value.imageFile = file;
+    collectionMetadataDetails.value.imageUrl = ''; // Clear URL if file is selected
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      collectionMetadataDetails.value.imagePreviewUrl = e.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  } else {
+    collectionMetadataDetails.value.imageFile = null;
+    collectionMetadataDetails.value.imagePreviewUrl = null;
+  }
+}
+function handleImageFileChange(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0];
+  if (file) {
+    nftBaseMetadata.value.imageFile = file;
+    nftBaseMetadata.value.imageUrl = '';
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      nftBaseMetadata.value.imagePreviewUrl = e.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  } else {
+    nftBaseMetadata.value.imageFile = null;
+    nftBaseMetadata.value.imagePreviewUrl = null;
+  }
+}
 // Watch for wallet connection changes to update default creator and SOL destination
 watch(wallet.publicKey, (solanaWeb3jsPk: SolanaWeb3JsPublicKey | null) => {
   if (solanaWeb3jsPk) {
@@ -249,20 +352,29 @@ watch(wallet.publicKey, (solanaWeb3jsPk: SolanaWeb3JsPublicKey | null) => {
 }, { immediate: true }); // Run on mount to set initial values if wallet already connected
 
 
+function addAttribute() {
+  nftBaseMetadata.value.attributes.push({ trait_type: '', value: '' });
+}
+
+function removeAttribute(attrIndex: number) {
+  nftBaseMetadata.value.attributes.splice(attrIndex, 1);
+}
+
+
 // --- Main Creation Logic ---
 async function handleCreateCandyMachine() {
   const { umi } = await initWallet();
     // umi.use(mplTokenMetadata());
-    umi.use(mplCandyMachine());
-    console.log(umi)
+  umi.use(mplCandyMachine());
+  console.log(umi)
   if (!umi || !wallet.publicKey.value) { // wallet.publicKey.value is SolanaWeb3JsPublicKey
     errorMessage.value = 'Wallet not connected or UMI not initialized.';
     return;
   }
-  if (items.value.length !== cmConfig.value.itemsAvailable) {
-    errorMessage.value = `Number of items (${items.value.length}) must match "Total Items Available" (${cmConfig.value.itemsAvailable}).`;
-    return;
-  }
+  // if (items.value.length !== cmConfig.value.itemsAvailable) {
+  //   errorMessage.value = `Number of items (${items.value.length}) must match "Total Items Available" (${cmConfig.value.itemsAvailable}).`;
+  //   return;
+  // }
   if (!collectionConfig.value.uri) {
     errorMessage.value = "Collection Metadata URI is required.";
     return;
@@ -274,6 +386,36 @@ async function handleCreateCandyMachine() {
     }
   }
 
+  let finalImageUrl = nftBaseMetadata.value.imageUrl;
+  if (nftBaseMetadata.value.imageFile) {
+      const url  = await uploadFileToIPFS(nftBaseMetadata.value.imageFile);
+      finalImageUrl = url.imageUrl
+  }
+  if (!finalImageUrl) throw new Error(`Image missing for shared NFT metadata.`);
+  
+  // 3. Create metadata JSON
+
+  const metadata = {
+    name: cmConfig.value.namePrefix.trim(), // Name in JSON
+    symbol: cmConfig.value.symbol,
+    description: nftBaseMetadata.value.description,
+    seller_fee_basis_points: cmConfig.value.sellerFeeBasisPoints,
+    image: finalImageUrl,
+    attributes: nftBaseMetadata.value.attributes,
+    properties: {
+        files: [{ uri: finalImageUrl, type: nftBaseMetadata.value.imageFile?.type || "image/png" }],
+        category: "image",
+        creators: JSON.parse(cmConfig.value.creatorsJson).map((c:any) => ({ address: c.address, share: c.share })),
+    },
+    collection: { name: collectionConfig.value.name, family: collectionConfig.value.symbol }
+  };
+  
+  // 4. Upload metadata to IPFS
+  const metadataUploadResult = await uploadJsonToIPFS(metadata);
+  if (!metadataUploadResult.success) {
+    throw new Error(`Failed to upload metadata: ${metadataUploadResult.error}`);
+  }
+  nftBaseMetadata.value.generatedJsonUri = metadataUploadResult.metadataUrl;
   isLoading.value = true;
   successMessage.value = '';
   errorMessage.value = '';
@@ -285,137 +427,184 @@ async function handleCreateCandyMachine() {
 
   try {
     // 0. Prepare Creators from JSON input
-    // let parsedUmiCreators: { address: UmiPublicKey; verified: boolean; share: number }[] | null = null;
-    // try {
-    //     parsedUmiCreators = JSON.parse(cmConfig.value.creatorsJson).map((c: any) => ({
-    //         address: umiPublicKeyUtil(c.address), // Convert base58 string to UMI PublicKey
-    //         verified: c.verified !== undefined ? c.verified : false,
-    //         share: c.share,
-    //     }));
-    //     if (!parsedUmiCreators || parsedUmiCreators.length === 0) {
-    //         throw new Error("Creators array cannot be empty.");
-    //     }
-    // } catch (e: any) {
-    //     throw new Error(`Invalid JSON format or content for creators: ${e.message}`);
-    // }
+    let parsedUmiCreators: { address: UmiPublicKey; verified: boolean; share: number }[] | null = null;
+    try {
+        parsedUmiCreators = JSON.parse(cmConfig.value.creatorsJson).map((c: any) => ({
+            address: umiPublicKeyUtil(c.address), // Convert base58 string to UMI PublicKey
+            verified: c.verified !== undefined ? c.verified : false,
+            share: c.share,
+        }));
+        if (!parsedUmiCreators || parsedUmiCreators.length === 0) {
+            throw new Error("Creators array cannot be empty.");
+        }
+    } catch (e: any) {
+        throw new Error(`Invalid JSON format or content for creators: ${e.message}`);
+    }
+    let collectionImageFinalUrl = collectionMetadataDetails.value.imageUrl;
+    if (collectionMetadataDetails.value.imageFile) {
+      const url = await uploadFileToIPFS(collectionMetadataDetails.value.imageFile);
+      collectionImageFinalUrl = url.imageUrl
+    }
 
-    // // 1. Create Collection NFT
-    // const collectionUpdateAuthority = generateSigner(umi)
-    // const collectionMint = generateSigner(umi)
-    // console.log("Creating collection NFT...");
-    // // console.log(u.identity,umi)
-    // const createCollectionBuilder = await createNft(umi, {
-    //   mint: collectionMint,
-    //   authority: umi.identity,
-    //   name: collectionConfig.value.name,
-    //   uri: collectionConfig.value.uri,
-    //   sellerFeeBasisPoints: percentAmount(9.99, 2), // 9.99%
-    //   isCollection: true,
-    // }).sendAndConfirm(umi)
-    // const candyMachineSettings = {
-    //   collectionMint: collectionMint.publicKey,
-    //   collectionUpdateAuthority,
-    //   itemsAvailable: cmConfig.value.itemsAvailable,
-    // }
-    // // const createCollectionResult = await createCollectionBuilder.sendAndConfirm(u, { confirm: { commitment: 'processed' } });
-    // // createdCollectionId.value = collectionMintSigner.publicKey.toString(); // UMI PublicKey .toString() is base58
-    // // transactionSignature.value = base58.deserialize(createCollectionResult.signature)[0];
-    // // console.log('Collection NFT created:', createdCollectionId.value, "TX:", transactionSignature.value);
-    // successMessage.value = `Collection NFT created: ${createdCollectionId.value}. `;
+    let parsedCollectionCreators: { address: string; share: number }[] = [];
+    try {
+      // Use the same creators from cmConfig for the collection metadata for simplicity
+      parsedCollectionCreators = JSON.parse(cmConfig.value.creatorsJson).map((c: any) => ({
+          address: c.address, // Keep as string for JSON
+          share: c.share,
+      }));
+    } catch (e) {
+        console.warn("Could not parse creators for collection metadata, skipping in JSON.");
+    }
+    const collectionJsonToUpload = {
+      name: collectionConfig.value.name,
+      symbol: collectionConfig.value.symbol || undefined, // Optional
+      description: collectionMetadataDetails.value.description,
+      image: collectionImageFinalUrl,
+      seller_fee_basis_points: collectionConfig.value.sellerFeeBasisPoints,
+      external_url: collectionMetadataDetails.value.external_url || undefined, // Optional
+      properties: {
+          files: [{ uri: collectionImageFinalUrl, type: collectionMetadataDetails.value.imageFile?.type || "image/png" }],
+          category: "image",
+          creators: parsedCollectionCreators.length > 0 ? parsedCollectionCreators : undefined,
+      }
+      // Add collection attributes here if you add fields for them
+    };
+    const collectionMetadata = await uploadJsonToIPFS(collectionJsonToUpload);
+    collectionConfig.value.uri = collectionMetadata.metadataUrl;
 
-    // // 2. Prepare Candy Guard settings
-    // const candyGuardSigner: Signer = generateSigner(umi);
-    // const guardsToSet: any = {
-    //     // Default Bot Tax: Good practice to include, even if 0.
-    //     botTax: some({ lamports: sol(0.01), lastInstruction: true }), // Example: 0.01 SOL bot tax
-    // };
-    // if (guardConfig.value.solPayment.amount > 0) {
-    //   const solPaymentDestinationString = guardConfig.value.solPayment.destination || u.identity.publicKey.toString();
-    //   guardsToSet.solPayment = some({
-    //     lamports: sol(guardConfig.value.solPayment.amount),
-    //     destination: umiPublicKeyUtil(solPaymentDestinationString), // Convert base58 string to UMI PublicKey
-    //   });
-    // }
-    // if (guardConfig.value.startDate) {
-    //   try {
-    //     guardsToSet.startDate = some({ date: dateTime(new Date(guardConfig.value.startDate).getTime() / 1000) });
-    //   } catch (e) { console.warn("Invalid start date format, skipping.")}
-    // }
-    // if (guardConfig.value.endDate) {
-    //   try {
-    //     guardsToSet.endDate = some({ date: dateTime(new Date(guardConfig.value.endDate).getTime() / 1000) });
-    //   } catch (e) { console.warn("Invalid end date format, skipping.")}
-    // }
+    // 1. Create Collection NFT
+    const collectionUpdateAuthority = generateSigner(umi)
+    const collectionMint = generateSigner(umi)
+    console.log("Creating collection NFT...");
+    // console.log(u.identity,umi)
+    const createCollectionBuilder = await createNft(umi, {
+      mint: collectionMint,
+      authority: umi.identity,
+      name: collectionConfig.value.name,
+      uri: collectionConfig.value.uri,
+      sellerFeeBasisPoints: percentAmount(collectionConfig.value.sellerFeeBasisPoints / 100, 2), // 9.99%
+      isCollection: true,
+      collectionDetails: {
+        __kind: 'V1',
+        size: 0,
+      }
+    }).sendAndConfirm(umi)
+    const candyMachineSettings = {
+      collectionMint: collectionMint.publicKey,
+      collectionUpdateAuthority,
+      itemsAvailable: cmConfig.value.itemsAvailable,
+    }
+    // const createCollectionResult = await createCollectionBuilder.sendAndConfirm(u, { confirm: { commitment: 'processed' } });
+    // createdCollectionId.value = collectionMintSigner.publicKey.toString(); // UMI PublicKey .toString() is base58
+    // transactionSignature.value = base58.deserialize(createCollectionResult.signature)[0];
+    // console.log('Collection NFT created:', createdCollectionId.value, "TX:", transactionSignature.value);
+    successMessage.value = `Collection NFT created: ${createCollectionBuilder.result.value}. `;
 
-    // // 3. Create Candy Machine (and its Candy Guard)
-    //  await new Promise(resolve => setTimeout(resolve, 10000)); // Add this to make sure the createNft was completed.
-    // const candyMachineSigner: Signer = generateSigner(umi);
-    // console.log("Creating Candy Machine with guard...");
+    // 2. Prepare Candy Guard settings
+    const candyGuardSigner: Signer = generateSigner(umi);
+    const guardsToSet: any = {
+        // Default Bot Tax: Good practice to include, even if 0.
+        botTax: some({ lamports: sol(0.01), lastInstruction: true, destination: publicKey(umi.identity)  }), // Example: 0.01 SOL bot tax
+    };
+    if (guardConfig.value.solPayment.amount > 0) {
+      const solPaymentDestinationString = guardConfig.value.solPayment.destination || u.identity.publicKey.toString();
+      guardsToSet.solPayment = some({
+        lamports: sol(guardConfig.value.solPayment.amount),
+        destination: umiPublicKeyUtil(solPaymentDestinationString), // Convert base58 string to UMI PublicKey
+      });
+    }
+    if (guardConfig.value.startDate) {
+      try {
+        guardsToSet.startDate = some({ date: dateTime(new Date(guardConfig.value.startDate).getTime() / 1000) });
+      } catch (e) { console.warn("Invalid start date format, skipping.")}
+    }
+    if (guardConfig.value.endDate) {
+      try {
+        guardsToSet.endDate = some({ date: dateTime(new Date(guardConfig.value.endDate).getTime() / 1000) });
+      } catch (e) { console.warn("Invalid end date format, skipping.")}
+    }
 
-    // const candyMachine = generateSigner(umi)
-    // console.log({
-    //   candyMachine,
-    //   collectionMint: collectionMint.publicKey,
-    //   collectionUpdateAuthority: umi.identity,
-    //   tokenStandard: TokenStandard.NonFungible,
-    //   sellerFeeBasisPoints: percentAmount(9.99, 2), // 9.99%
-    //   itemsAvailable: 5000,
-    //   guards: guardsToSet,
-    //   creators: [
-    //     {
-    //       address: umi.identity.publicKey,
-    //       verified: true,
-    //       percentageShare: 100,
-    //     },
-    //   ],
-    //   configLineSettings: some({
-    //     prefixName: cmConfig.value.symbol,
-    //     nameLength: 32,
-    //     prefixUri: 'https://example.com/nft',
-    //     uriLength: 200,
-    //     isSequential: false,
-    //   }),
-    // })
-    // const createCandyMachine = await create(umi, {
-    //   candyMachine,
-    //   collectionMint: collectionMint.publicKey,
-    //   collectionUpdateAuthority: umi.identity,
-    //   tokenStandard: TokenStandard.NonFungible,
-    //   sellerFeeBasisPoints: percentAmount(9.99, 2), // 9.99%
-    //   itemsAvailable: 5000,
-    //   guards: guardsToSet,
-    //   creators: [
-    //     {
-    //       address: umi.identity.publicKey,
-    //       verified: true,
-    //       percentageShare: 100,
-    //     },
-    //   ],
-    //   configLineSettings: some({
-    //     prefixName:'',
-    //     nameLength: 32,
-    //     prefixUri: 'https://example.com/nft',
-    //     uriLength: 50,
-    //     isSequential: false,
-    //   }),
-    // }).then(tx => tx.sendAndConfirm(umi, { confirm: { commitment: 'processed' } })).then(r => r.name);
+    // 3. Create Candy Machine (and its Candy Guard)
+    await new Promise(resolve => setTimeout(resolve, 10000)); // Add this to make sure the createNft was completed.
+    console.log("Creating Candy Machine with guard...");
+    // console.log(JSON.stringify(guardsToSet, null, 2));
+    const candyMachine = generateSigner(umi)
+    console.log({
+     candyMachine,
+      collectionMint: collectionMint.publicKey,
+      collectionUpdateAuthority: umi.identity,
+      tokenStandard: TokenStandard.NonFungible,
+      sellerFeeBasisPoints: percentAmount(cmConfig.value.sellerFeeBasisPoints / 100, 2),
+      itemsAvailable: cmConfig.value.itemsAvailable,
+      isMutable: cmConfig.value.isMutable,
+      symbol: cmConfig.value.symbol,
+      maxEditionSupply: cmConfig.value.maxEditionSupply,
+      creators: [
+        {
+          address: umi.identity.publicKey,
+          verified: true,
+          percentageShare: 100,
+        },
+      ],
+      guards: guardsToSet,
+      configLineSettings: some({
+        prefixName: cmConfig.value.namePrefix.trim(), // This is the key for sequential names
+        nameLength: 0, // With prefixName and isSequential, nameLength is often 0 as CM calculates. Max name is 32.
+        prefixUri: '', // Full URI provided in config lines
+        uriLength: nftBaseMetadata.value.generatedJsonUri?.length || 80,
+        isSequential: true, // Enable sequential numbering
+      }),
+    })
+    const createCandyMachine = await create(umi, {
+      candyMachine,
+      collectionMint: collectionMint.publicKey,
+      collectionUpdateAuthority: umi.identity,
+      tokenStandard: TokenStandard.NonFungible,
+      sellerFeeBasisPoints: percentAmount(cmConfig.value.sellerFeeBasisPoints / 100, 2),
+      itemsAvailable: cmConfig.value.itemsAvailable,
+      isMutable: cmConfig.value.isMutable,
+      symbol: cmConfig.value.symbol,
+      maxEditionSupply: cmConfig.value.maxEditionSupply,
+      creators: [
+        {
+          address: umi.identity.publicKey,
+          verified: true,
+          percentageShare: 100,
+        },
+      ],
+      guards: guardsToSet,
+      configLineSettings: some({
+        prefixName: cmConfig.value.namePrefix.trim(), // This is the key for sequential names
+        nameLength: 0, // With prefixName and isSequential, nameLength is often 0 as CM calculates. Max name is 32.
+        prefixUri: '', // Full URI provided in config lines
+        uriLength: nftBaseMetadata.value.generatedJsonUri?.length || 80,
+        isSequential: true, // Enable sequential numbering
+      }),
+    }).then(tx => tx.sendAndConfirm(umi, { confirm: { commitment: 'processed' } }));
     // console.log(createCandyMachine,candyMachine)
     // console.log('Candy Machine created:', createdCandyMachineId.value, "TX:", transactionSignature.value);
     // successMessage.value += `Candy Machine created: ${createCandyMachine}. `;
 
     // 4. Insert Items into Candy Machine
-    console.log("Inserting items into Candy Machine...");
-    // await new Promise(resolve => setTimeout(resolve, 10000)); // Add this to make sure the createNft was completed.
-    const configLines: ConfigLine[] = items.value.map(item => ({
-      name: item.name,
-      uri: item.uri,
-    }));
+    // console.log("Inserting items into Candy Machine...");
+    await new Promise(resolve => setTimeout(resolve, 10000)); // Add this to make sure the createNft was completed.
+     const configLines: ConfigLine[] = [];
+    for (let i = 0; i < cmConfig.value.itemsAvailable; i++) {
+        // When isSequential is true, the `name` in ConfigLine is often the `prefixName` itself,
+        // or can sometimes be an empty string. CM appends the number.
+        // Let's use the prefixName here for clarity, CM will add "+index".
+        configLines.push({
+            name: cmConfig.value.namePrefix.trim(), // This name will have sequence number appended by CM
+            uri: nftBaseMetadata.value.generatedJsonUri!,
+        });
+    }
 
     const CHUNK_SIZE = 10;
     for (let i = 0; i < configLines.length; i += CHUNK_SIZE) {
         const chunk = configLines.slice(i, i + CHUNK_SIZE);
         const insertBuilder = addConfigLines(umi, {
-            candyMachine: publicKey('F3LREwVCB97fq9wZCgh41fuDn9a3QpuUFPt3Qzsm3VvK'),
+            candyMachine: candyMachine.publicKey,
             authority: umi.identity,
             configLines: chunk,
             index: Number(i),
