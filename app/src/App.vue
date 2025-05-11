@@ -110,7 +110,7 @@ export default {
 </script> -->
 
 <script>
-import MintEdition from './components/MintComponent.vue';
+import MintEdition from './components/AllCrud.vue';
 export default {
   name: 'App',
   components: {

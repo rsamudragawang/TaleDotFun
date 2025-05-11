@@ -1,0 +1,763 @@
+{
+  "address": "EZ1GQumWC4UwwQBGERwtnMNS6rJRprjP1HhGfhLC2utJ",
+  "metadata": {
+    "name": "readium_fun",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
+    {
+      "name": "create_episode",
+      "docs": [
+        "Creates a new episode PDA account, linked to a tale.",
+        "The authority to create an episode is the creator of the parent tale."
+      ],
+      "discriminator": [
+        80,
+        93,
+        70,
+        84,
+        241,
+        235,
+        183,
+        26
+      ],
+      "accounts": [
+        {
+          "name": "episode_account",
+          "docs": [
+            "The new episode PDA account to be initialized.",
+            "Seeds: \"episode\", parent tale's key, episode number."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  112,
+                  105,
+                  115,
+                  111,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tale"
+              },
+              {
+                "kind": "arg",
+                "path": "episode_number"
+              }
+            ]
+          }
+        },
+        {
+          "name": "tale",
+          "docs": [
+            "The parent Tale account this episode belongs to.",
+            "Used to derive PDA, get creator as authority.",
+            "Corrected: `has_one = creator` refers to the `creator` Signer below."
+          ]
+        },
+        {
+          "name": "creator",
+          "docs": [
+            "The signer creating the episode. Must be the creator of the parent Tale.",
+            "Corrected: Renamed from signer_authority to creator for consistency with `has_one`."
+          ],
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "tale"
+          ]
+        },
+        {
+          "name": "system_program",
+          "docs": [
+            "The Solana system program."
+          ],
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "episode_name",
+          "type": "string"
+        },
+        {
+          "name": "episode_number",
+          "type": "u32"
+        },
+        {
+          "name": "candy_machine_id",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "create_tale",
+      "docs": [
+        "Creates a new tale PDA account."
+      ],
+      "discriminator": [
+        97,
+        241,
+        193,
+        26,
+        247,
+        45,
+        207,
+        73
+      ],
+      "accounts": [
+        {
+          "name": "tale_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  97,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              },
+              {
+                "kind": "arg",
+                "path": "tale_name"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "tale_name",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "create_user",
+      "docs": [
+        "Creates a new user account."
+      ],
+      "discriminator": [
+        108,
+        227,
+        130,
+        130,
+        252,
+        109,
+        75,
+        218
+      ],
+      "accounts": [
+        {
+          "name": "user_account",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "user_type",
+          "type": {
+            "defined": {
+              "name": "UserType"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "delete_episode",
+      "docs": [
+        "Deletes an episode account and reclaims its rent.",
+        "Authority is the creator of the parent tale (stored in episode_account.authority)."
+      ],
+      "discriminator": [
+        136,
+        15,
+        240,
+        166,
+        34,
+        71,
+        105,
+        125
+      ],
+      "accounts": [
+        {
+          "name": "episode_account",
+          "docs": [
+            "The episode account to be closed.",
+            "`has_one = authority` ensures the signer matches `episode_account.authority`.",
+            "`close = authority` transfers rent back to this authority."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  112,
+                  105,
+                  115,
+                  111,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "episode_account.tale",
+                "account": "Episode"
+              },
+              {
+                "kind": "account",
+                "path": "episode_account.episode_number",
+                "account": "Episode"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "docs": [
+            "The signer (authority) performing the deletion. Must match `episode_account.authority`."
+          ],
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "episode_account"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "delete_tale",
+      "docs": [
+        "Deletes a tale account and reclaims its rent."
+      ],
+      "discriminator": [
+        86,
+        32,
+        28,
+        147,
+        75,
+        234,
+        169,
+        161
+      ],
+      "accounts": [
+        {
+          "name": "tale_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  97,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              },
+              {
+                "kind": "account",
+                "path": "tale_account.name",
+                "account": "Tale"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "tale_account"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "delete_user",
+      "docs": [
+        "Deletes a user account and reclaims its rent."
+      ],
+      "discriminator": [
+        186,
+        85,
+        17,
+        249,
+        219,
+        231,
+        98,
+        251
+      ],
+      "accounts": [
+        {
+          "name": "user_account",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "user_account"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "update_episode",
+      "docs": [
+        "Updates an existing episode's name or candy machine ID.",
+        "The episode_number and tale link are immutable as they are part of PDA seeds.",
+        "Authority is the creator of the parent tale (stored in episode_account.authority)."
+      ],
+      "discriminator": [
+        222,
+        18,
+        151,
+        195,
+        227,
+        115,
+        63,
+        123
+      ],
+      "accounts": [
+        {
+          "name": "episode_account",
+          "docs": [
+            "The episode account to be updated.",
+            "`has_one = authority` ensures that the `authority` field in the `Episode` account",
+            "(which is the tale's creator) matches the signer."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  112,
+                  105,
+                  115,
+                  111,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "episode_account.tale",
+                "account": "Episode"
+              },
+              {
+                "kind": "account",
+                "path": "episode_account.episode_number",
+                "account": "Episode"
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority",
+          "docs": [
+            "The signer (authority) performing the update. Must match `episode_account.authority`."
+          ],
+          "signer": true,
+          "relations": [
+            "episode_account"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "new_name",
+          "type": {
+            "option": "string"
+          }
+        },
+        {
+          "name": "new_candy_machine_id",
+          "type": {
+            "option": "pubkey"
+          }
+        }
+      ]
+    },
+    {
+      "name": "update_tale_name",
+      "docs": [
+        "Updates the name of an existing tale."
+      ],
+      "discriminator": [
+        202,
+        148,
+        56,
+        166,
+        103,
+        178,
+        213,
+        166
+      ],
+      "accounts": [
+        {
+          "name": "tale_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  97,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              },
+              {
+                "kind": "account",
+                "path": "tale_account.name",
+                "account": "Tale"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "signer": true,
+          "relations": [
+            "tale_account"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "new_name",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "update_user",
+      "docs": [
+        "Updates an existing user's information."
+      ],
+      "discriminator": [
+        9,
+        2,
+        160,
+        169,
+        118,
+        12,
+        207,
+        84
+      ],
+      "accounts": [
+        {
+          "name": "user_account",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true,
+          "relations": [
+            "user_account"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "name",
+          "type": {
+            "option": "string"
+          }
+        },
+        {
+          "name": "user_type",
+          "type": {
+            "option": {
+              "defined": {
+                "name": "UserType"
+              }
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Episode",
+      "discriminator": [
+        41,
+        175,
+        64,
+        71,
+        108,
+        169,
+        208,
+        47
+      ]
+    },
+    {
+      "name": "Tale",
+      "discriminator": [
+        109,
+        239,
+        69,
+        41,
+        35,
+        229,
+        44,
+        219
+      ]
+    },
+    {
+      "name": "User",
+      "discriminator": [
+        159,
+        117,
+        95,
+        227,
+        239,
+        151,
+        58,
+        236
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "NameTooLong",
+      "msg": "The provided user name is too long."
+    },
+    {
+      "code": 6001,
+      "name": "UserNameEmpty",
+      "msg": "The user name cannot be empty."
+    },
+    {
+      "code": 6002,
+      "name": "TaleNameTooLong",
+      "msg": "The provided tale name is too long."
+    },
+    {
+      "code": 6003,
+      "name": "TaleNameEmpty",
+      "msg": "The tale name cannot be empty."
+    },
+    {
+      "code": 6004,
+      "name": "BumpError",
+      "msg": "Could not retrieve bump seed. Ensure 'bump' is used in PDA account constraints."
+    },
+    {
+      "code": 6005,
+      "name": "EpisodeNameTooLong",
+      "msg": "The provided episode name is too long."
+    },
+    {
+      "code": 6006,
+      "name": "EpisodeNameEmpty",
+      "msg": "The episode name cannot be empty."
+    },
+    {
+      "code": 6007,
+      "name": "InvalidEpisodeNumber",
+      "msg": "Episode number must be greater than zero."
+    },
+    {
+      "code": 6008,
+      "name": "InvalidTaleAuthority",
+      "msg": "The signer is not the authorized creator of the tale."
+    },
+    {
+      "code": 6009,
+      "name": "InvalidEpisodeAuthority",
+      "msg": "The signer is not the authorized authority for this episode."
+    },
+    {
+      "code": 6010,
+      "name": "NoFieldsToUpdate",
+      "msg": "No fields provided to update or values are the same."
+    }
+  ],
+  "types": [
+    {
+      "name": "Episode",
+      "docs": [
+        "Represents an episode account, linked to a Tale. PDA."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "name",
+            "docs": [
+              "Name of the episode."
+            ],
+            "type": "string"
+          },
+          {
+            "name": "tale",
+            "docs": [
+              "Public key of the parent Tale account."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "episode_number",
+            "docs": [
+              "Sequential number of the episode within its tale (e.g., 1, 2, 3...). Used in PDA seeds."
+            ],
+            "type": "u32"
+          },
+          {
+            "name": "candy_machine_id",
+            "docs": [
+              "Public key of the associated Candy Machine."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "docs": [
+              "Authority that can manage this episode (creator of the parent Tale)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Bump seed for PDA derivation."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Tale",
+      "docs": [
+        "Represents a tale account, which is a Program Derived Address (PDA)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "User",
+      "docs": [
+        "Represents a user account."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "user_type",
+            "type": {
+              "defined": {
+                "name": "UserType"
+              }
+            }
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "UserType",
+      "docs": [
+        "Defines the types of users."
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Admin"
+          },
+          {
+            "name": "Member"
+          },
+          {
+            "name": "Guest"
+          }
+        ]
+      }
+    }
+  ]
+}
