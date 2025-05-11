@@ -19,6 +19,3 @@ idl-build = ["anchor-lang/idl-build"]
 
 [dependencies]
 anchor-lang = "0.31.1"
-anchor-spl = { version = "0.31.1", features = ["metadata"] } # Keep aligned with anchor-lang
-mpl-core = "0.2.0"
-bs58 = "0.5.1"

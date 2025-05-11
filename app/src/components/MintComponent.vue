@@ -352,57 +352,7 @@ pubkey: botTaxDestinationPublicKeyToUse,
       }, // For other guard-specific arguments
     };
 
-    // Add explicitly gathered remaining accounts if any
-//    if (remainingAccounts.length > 0) {
-//     mintV2Args.mintArgs = [...(mintV2Args.remainingAccounts || []), ...remainingAccounts];
-// }
-
-
-    // const mintV2Args = {
-    //   candyMachine: candyMachine.value.publicKey,
-    //   nftMint: nftMintSigner,
-    //   collectionMint: collectionNft.value.publicKey,
-    //   collectionUpdateAuthority: collectionUpdateAuthoritySigner,
-      
-    // }
-    // --- FIX FOR BOT TAX GUARD ---
-    // const botTaxGuard = candyGuard.value.guards.botTax;
-    // if (botTaxGuard?.value) { // Check if botTax guard is active and has settings
-    //   const botTaxDestinationPublicKey = botTaxGuard.value.destination;
-    //   if (!botTaxDestinationPublicKey) {
-    //     console.error("BotTax guard is active, but its destination account is not found in candyGuard settings!");
-    //     throw new Error("BotTax guard destination configuration missing.");
-    //   }
-
-    //   console.log("BotTax guard is active. Destination:", botTaxDestinationPublicKey.toString());
-      
-    //   // Add the bot tax destination account to remainingAccounts.
-    //   // The Candy Guard program expects this account to process the bot tax.
-    //   mintV2Args.remainingAccounts.push({
-    //     pubkey: publicKey(botTaxDestinationPublicKey.toString()), // Ensure it's a PublicKey object
-    //     isSigner: false,
-    //     isWritable: true, // Treasury account needs to be writable to receive lamports
-    //   });
-
-    //   // Some UMI versions/guard setups might expect this to be passed via mintArgs
-    //   // for UMI to then construct the remainingAccounts. For example (hypothetical):
-    //   // mintV2Args.mintArgs.botTax = some({ destination: botTaxDestinationPublicKey });
-    //   // However, directly adding to remainingAccounts is a surefire way if mintArgs doesn't handle it.
-    //   // The error "MissingRemainingAccount" indicates the account wasn't in the final transaction list.
-    // }
-    // --- END OF FIX FOR BOT TAX GUARD ---
-
-    // Example for other guards that might need mintArgs:
-    // const allowListGuard = candyGuard.value.guards.allowList;
-    // if (allowListGuard?.value && myMerkleProof) { // myMerkleProof would come from user input/logic
-    //   mintV2Args.mintArgs.allowList = some({ merkleProof: myMerkleProof });
-    // }
-
     console.log("MintV2 args:", mintV2Args);
-
-
-
-
 
     const builder = transactionBuilder()
       .add(setComputeUnitLimit(umiInstance.value, { units: 800_000 }))
