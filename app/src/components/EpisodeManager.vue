@@ -29,24 +29,52 @@
 
           <div class="border-t dark:border-gray-700 pt-4 mt-4">
             <label class="form-label flex items-center">
-              <input type="checkbox" v-model="currentEpisode.isNft" class="form-checkbox mr-2" />
+              <input type="checkbox" v-model="currentEpisode.isNft" @change="toggleNftSection" class="form-checkbox mr-2" />
               This episode is linked to an NFT (requires mint to view full content)
             </label>
           </div>
-          <div v-if="currentEpisode.isNft" class="space-y-4 mt-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-md">
-            <div>
-              <label for="candyMachineIdModal" class="form-label">Associated Candy Machine ID (or NFT Mint Address):</label>
-              <input type="text" id="candyMachineIdModal" v-model="currentEpisode.candyMachineId" class="form-input" placeholder="Enter CM ID or NFT Mint" />
-              <small class="form-text">This ID determines access to content if 'Linked to NFT' is checked.</small>
+
+          <div v-if="currentEpisode.isNft" class="space-y-2 mt-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-md">
+            <div v-if="currentEpisode.candyMachineId && !showCandyMachineCreatorForm">
+                <label class="form-label">Associated Candy Machine ID:</label>
+                <input type="text" :value="currentEpisode.candyMachineId" class="form-input bg-gray-100 dark:bg-gray-600" readonly />
+                <button type="button" @click="triggerCandyMachineSetup(true)" class="btn btn-warning btn-xs mt-1">
+                    Edit/Recreate CM
+                </button>
+            </div>
+            <div v-else-if="showCandyMachineCreatorForm">
+                <p class="text-sm text-gray-600 dark:text-gray-300 mb-2">
+                    Setting up a new Candy Machine for: <strong>{{ currentEpisode.episodeName }}</strong>
+                </p>
+                <CandyMachineCreator
+                    :parentTale="parentTale"
+                    :currentEpisodeNameFromParent="currentEpisode.episodeName"
+                    :episodeImageForNft="uploadedEpisodeImageForNft"
+                    :episodeDescriptionForNft="currentEpisode.content"
+                    :isWalletManagedExternally="true"
+                    @candyMachineCreated="handleCandyMachineCreated"
+                    @cancelCandyMachineCreation="showCandyMachineCreatorForm = false"
+                />
+                <button type="button" @click="showCandyMachineCreatorForm = false" class="btn btn-secondary btn-sm mt-3 w-full">
+                    Cancel CM Setup
+                </button>
+            </div>
+            <div v-else>
+                 <button type="button" @click="triggerCandyMachineSetup(false)" class="btn btn-info btn-sm">
+                    Setup New Candy Machine
+                </button>
+                <span class="mx-2 text-gray-500 dark:text-gray-400 text-sm">OR</span>
+                <input type="text" v-model="manualCandyMachineId" class="form-input inline-w-auto text-sm" placeholder="Enter Existing CM ID" />
+                <button type="button" @click="assignManualCandyMachineId" class="btn btn-secondary btn-sm ml-2">Assign</button>
             </div>
           </div>
           <div v-if="!isEpisodeContentLockedForModal">
             <div>
-              <label for="episodeContent" class="form-label">Content (Description):</label>
+              <label for="episodeContent" class="form-label">Content (Description for Episode/NFT):</label>
               <textarea id="episodeContent" v-model="currentEpisode.content" class="form-textarea h-32"></textarea>
             </div>
             <div class="mt-4">
-              <label class="form-label">Episode Images (Max 10):</label>
+              <label class="form-label">Episode Images (Max 10, first image used for NFT if applicable):</label>
               <div v-for="(imgUrl, index) in currentEpisode.images" :key="index" class="flex items-center mb-2">
                 <input type="url" v-model="currentEpisode.images[index]" class="form-input flex-grow mr-2" placeholder="https://gateway.pinata.cloud/ipfs/..." />
                 <button type="button" @click="removeImageField(index)" class="btn btn-danger btn-xs p-1 leading-none">Remove</button>
@@ -65,9 +93,9 @@
             </div>
           </div>
           <div v-else class="info-box">
-            Content and images for this NFT-linked episode are typically managed via its metadata on IPFS.
-            You can edit them here if you have minted this NFT.
+            Content and images for this NFT-linked episode are locked.
             <span v-if="!props.appUser" class="block mt-1">Please connect your wallet and log in.</span>
+            <span v-else class="block mt-1">You may need to mint this NFT to view or edit its full content.</span>
           </div>
           <div>
             <label for="episodeOrder" class="form-label">Order (Optional):</label>
@@ -83,7 +111,9 @@
 
           <div class="flex justify-end space-x-3 mt-6 pt-4 border-t dark:border-gray-700">
             <button type="button" @click="closeEpisodeModal" class="btn btn-secondary">Cancel</button>
-            <button type="submit" :disabled="isSavingEpisode || isUploadingImages" class="btn btn-success">
+            <button type="submit"
+                    :disabled="isSavingEpisode || isUploadingImages || (currentEpisode.isNft && showCandyMachineCreatorForm && !currentEpisode.candyMachineId)"
+                    class="btn btn-success">
               {{ isSavingEpisode ? 'Saving...' : (editingEpisode ? 'Update Episode' : 'Create Episode') }}
             </button>
           </div>
@@ -104,10 +134,10 @@
         <div>
           <h4 class="text-lg font-semibold text-indigo-700 dark:text-indigo-400">{{ episode.episodeName }} (Order: {{episode.order !== undefined ? episode.order : 'N/A'}})</h4>
           
-          <p v-if="!isContentLockedForListedEpisode(episode)" class="text-sm text-gray-600 dark:text-gray-400 line-clamp-2" v-html="episode.content ? renderMarkdownMini(episode.content) : 'No content provided.'"></p>
+          <p v-if="!isContentLockedForListedEpisode(episode)" class="text-sm text-gray-600 dark:text-gray-400 line-clamp-3" v-html="episode.content ? renderMarkdownMini(episode.content) : 'No content provided.'"></p>
           <div v-else class="text-sm text-gray-500 dark:text-gray-400 italic my-2">
             Full content available after minting this NFT episode.
-            <a v-if="episode.candyMachineId" :href="`/mint/${episode.candyMachineId}`" class="link ml-1">Mint Now</a>
+            <router-link v-if="episode.isNft && episode.candyMachineId" :to="{ name: 'MintPage', params: { candyMachineAddress: episode.candyMachineId } }" class="link ml-1">Mint Now</router-link>
           </div>
 
           <div class="mt-2">
@@ -142,12 +172,13 @@
 import { ref, onMounted, computed, watch, defineProps } from 'vue';
 import axios from 'axios';
 import { uploadFileToIPFS } from '../services/pinataService';
-import { marked } from 'marked'; // For rendering markdown
+import { marked } from 'marked';
+import CandyMachineCreator from './CandyMachineCreator.vue'; // Import the component
 
 const props = defineProps({
   parentTale: { type: Object, required: true },
   appUser: { type: Object, default: null },
-  userMintActivities: { type: Array, default: () => [] } // New prop for user's mints
+  userMintActivities: { type: Array, default: () => [] }
 });
 
 const API_BASE_URL = import.meta.env.VITE_APP_AUTH_API_URL || 'http://localhost:3000/api';
@@ -170,6 +201,11 @@ const defaultEpisode = () => ({
   status: 'draft',
 });
 const currentEpisode = ref(defaultEpisode());
+const manualCandyMachineId = ref('');
+
+// State for Candy Machine Creator integration
+const showCandyMachineCreatorForm = ref(false);
+const uploadedEpisodeImageForNft = ref('');
 
 const uiMessage = ref({ text: '', type: 'info' });
 function showUiMessage(msg, type = 'info', duration = 4000) {
@@ -187,11 +223,9 @@ const setDefaultImage = (event) => {
 };
 const renderMarkdownMini = (markdownText) => {
     if (!markdownText) return '';
-    // Simple preview: take first N characters, strip markdown for plain text preview
-    const plainText = marked(markdownText).replace(/<[^>]+>/g, '');
-    return plainText.length > 100 ? plainText.substring(0, 100) + '...' : plainText;
+    const plainText = marked(markdownText, { breaks: true, gfm: true }).replace(/<[^>]+>/g, '');
+    return plainText.length > 150 ? plainText.substring(0, 150) + '...' : plainText;
 };
-
 
 const isAuthorAndCreator = computed(() => {
   return props.appUser &&
@@ -200,33 +234,29 @@ const isAuthorAndCreator = computed(() => {
          props.appUser.type === 'creator';
 });
 
-// Computed property to check if content should be locked in the MODAL
 const isEpisodeContentLockedForModal = computed(() => {
-  if (!currentEpisode.value.isNft) return false; // Not an NFT, not locked
-  if (isAuthorAndCreator.value) return false; // Author can always edit
-
-  if (!props.appUser || !props.appUser.walletAddress) return true; // Not logged in, locked
-
-  // Check if user has minted this specific NFT episode
+  if (!currentEpisode.value.isNft) return false;
+  if (isAuthorAndCreator.value) return false; 
+  if (!props.appUser || !props.appUser.walletAddress) return true;
   return !props.userMintActivities.some(
-    activity => activity.candyMachineId === currentEpisode.value.candyMachineId &&
+    activity => activity.candyMachineId === currentEpisode.value.candyMachineId && // Ensure CM ID exists for check
+                currentEpisode.value.candyMachineId && // Add this check
                 activity.userWalletAddress === props.appUser.walletAddress
   );
 });
 
-// Method to check if content should be locked for a LISTED episode
 const isContentLockedForListedEpisode = (episode) => {
-  if (!episode.isNft) return false; // Not an NFT, not locked
-  if (isAuthorAndCreator.value && props.appUser?.id === episode.author) return false; // Author can always view their own
-
-  if (!props.appUser || !props.appUser.walletAddress) return true; // Not logged in, locked
-
+  if (!episode.isNft) return false;
+  if (props.appUser && (props.appUser.id === episode.author || props.appUser.walletAddress === episode.authorWalletAddress)) {
+      return false;
+  }
+  if (!props.appUser || !props.appUser.walletAddress) return true;
   return !props.userMintActivities.some(
-    activity => activity.candyMachineId === episode.candyMachineId &&
+    activity => activity.candyMachineId === episode.candyMachineId && // Ensure CM ID exists for check
+                episode.candyMachineId && // Add this check
                 activity.userWalletAddress === props.appUser.walletAddress
   );
 };
-
 
 const episodeApiClient = axios.create({ baseURL: API_BASE_URL });
 episodeApiClient.interceptors.request.use(config => {
@@ -256,11 +286,57 @@ async function fetchEpisodesForTale() {
   }
 }
 
+function toggleNftSection() {
+    if (!currentEpisode.value.isNft) {
+        showCandyMachineCreatorForm.value = false;
+        currentEpisode.value.candyMachineId = '';
+    }
+    // If isNft is checked, the UI will show options to set up or assign CM ID
+}
+
+function triggerCandyMachineSetup(isEditingExistingCm = false) {
+    if (currentEpisode.value.images.length === 0) {
+        showUiMessage("Please upload or add at least one image for the episode. This image will be used for the NFT.", "warning");
+        return;
+    }
+    uploadedEpisodeImageForNft.value = currentEpisode.value.images[0]; // Use first image
+
+    if(isEditingExistingCm && currentEpisode.value.candyMachineId) {
+        console.log("Editing/Recreating CM for existing ID:", currentEpisode.value.candyMachineId);
+        // Potentially pre-fill CandyMachineCreator with existing CM details if it supports it
+    }
+    currentEpisode.value.candyMachineId = ''; // Clear any manually entered ID if creating new
+    manualCandyMachineId.value = '';
+    showCandyMachineCreatorForm.value = true;
+}
+
+function assignManualCandyMachineId() {
+    if (manualCandyMachineId.value.trim()) {
+        currentEpisode.value.candyMachineId = manualCandyMachineId.value.trim();
+        showCandyMachineCreatorForm.value = false;
+        manualCandyMachineId.value = '';
+        showUiMessage(`Candy Machine ID ${currentEpisode.value.candyMachineId} assigned.`, "success");
+    } else {
+        showUiMessage("Please enter a valid Candy Machine ID.", "warning");
+    }
+}
+
+function handleCandyMachineCreated(newCmId) {
+  console.log("EpisodeManager received candyMachineCreated event with ID:", newCmId);
+  currentEpisode.value.candyMachineId = newCmId;
+  showCandyMachineCreatorForm.value = false;
+  showUiMessage(`New Candy Machine (${newCmId}) created and assigned to this episode.`, "success");
+}
+
 function openEpisodeModal(episodeToEdit = null) {
   if (!isAuthorAndCreator.value) {
     showUiMessage("You are not authorized.", "error");
     return;
   }
+  showCandyMachineCreatorForm.value = false;
+  uploadedEpisodeImageForNft.value = '';
+  manualCandyMachineId.value = '';
+
   if (episodeToEdit) {
     editingEpisode.value = { ...episodeToEdit };
     currentEpisode.value = {
@@ -272,6 +348,9 @@ function openEpisodeModal(episodeToEdit = null) {
       order: episodeToEdit.order === undefined ? episodes.value.length : episodeToEdit.order,
       status: episodeToEdit.status || 'draft',
     };
+    if (currentEpisode.value.images.length > 0) { // Set image for potential CM creation
+        uploadedEpisodeImageForNft.value = currentEpisode.value.images[0];
+    }
   } else {
     editingEpisode.value = null;
     currentEpisode.value = defaultEpisode();
@@ -284,6 +363,8 @@ function closeEpisodeModal() {
   showEpisodeModal.value = false;
   editingEpisode.value = null;
   currentEpisode.value = defaultEpisode();
+  showCandyMachineCreatorForm.value = false;
+  uploadedEpisodeImageForNft.value = '';
   const fileInput = document.getElementById('episodeImageFiles');
   if (fileInput) fileInput.value = null;
 }
@@ -308,6 +389,9 @@ async function handleImageFilesChange(event) {
             }
         }
         currentEpisode.value.images.push(...uploadedUrls);
+        if (currentEpisode.value.images.length > 0 && !uploadedEpisodeImageForNft.value) {
+            uploadedEpisodeImageForNft.value = currentEpisode.value.images[0];
+        }
         showUiMessage(`${uploadedUrls.length} image(s) uploaded.`, "success");
     } catch (uploadError) {
         showUiMessage(`Image upload failed: ${uploadError.message}`, "error");
@@ -325,7 +409,12 @@ function addImageField() {
   }
 }
 function removeImageField(index) {
-  currentEpisode.value.images.splice(index, 1);
+  const removedImage = currentEpisode.value.images.splice(index, 1)[0];
+  if (uploadedEpisodeImageForNft.value === removedImage && currentEpisode.value.images.length > 0) {
+      uploadedEpisodeImageForNft.value = currentEpisode.value.images[0];
+  } else if (currentEpisode.value.images.length === 0) {
+      uploadedEpisodeImageForNft.value = '';
+  }
 }
 
 async function handleSaveEpisode() {
@@ -333,6 +422,16 @@ async function handleSaveEpisode() {
     showUiMessage("Parent tale missing.", "error");
     return;
   }
+  if (currentEpisode.value.isNft && !currentEpisode.value.candyMachineId && !showCandyMachineCreatorForm.value) {
+      showUiMessage("For an NFT-linked episode, please set up a new Candy Machine or assign an existing ID.", "warning");
+      return;
+  }
+   if (currentEpisode.value.isNft && showCandyMachineCreatorForm.value && !currentEpisode.value.candyMachineId) {
+      showUiMessage("Candy Machine setup is in progress. Please complete or cancel it, or assign an existing ID before saving the episode.", "warning");
+      return;
+  }
+
+
   isSavingEpisode.value = true;
   const payload = {
     ...currentEpisode.value,
@@ -340,11 +439,6 @@ async function handleSaveEpisode() {
   };
   if (!payload.isNft) {
     payload.candyMachineId = '';
-  } else if (payload.isNft && !payload.candyMachineId) {
-    // If it IS an NFT but no ID is provided by the author, it's okay,
-    // content will be locked for others until an ID is set and they mint.
-    // Author can still edit/add content.
-    console.info("Saving NFT-linked episode without a Candy Machine ID. Content will be locked for non-authors/non-minters.");
   }
 
   try {
@@ -384,14 +478,13 @@ watch(() => props.parentTale?._id, (newTaleId, oldTaleId) => {
   }
 }, { immediate: true });
 
-watch(() => props.appUser?.id, () => {
-    if (props.parentTale?._id) {
-        fetchEpisodesForTale(); // Re-fetch if user changes, as their mint status might affect display
+watch(() => props.appUser?.id, (newUserId, oldUserId) => {
+    if (newUserId !== oldUserId && props.parentTale?._id) {
+        fetchEpisodesForTale();
     }
 });
 watch(() => props.userMintActivities, () => {
-    // If mint activities change, re-evaluate display, though this is mostly handled by computed props
-    // No direct action needed here unless you want to force re-render, which Vue handles.
+    console.log("User mint activities prop changed in EpisodeManager.");
 }, { deep: true });
 
 
@@ -409,6 +502,7 @@ onMounted(() => {
 /* Styles from previous EpisodeManager.vue */
 .form-label { @apply block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1; }
 .form-input, .form-select, .form-textarea { @apply mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100; }
+.form-input.inline-w-auto { @apply w-auto inline-block max-w-xs; } /* Added max-w-xs */
 .form-file-input { @apply mt-1 block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 dark:file:bg-indigo-800 file:text-indigo-700 dark:file:text-indigo-300 hover:file:bg-indigo-100 dark:hover:file:bg-indigo-700; }
 .form-checkbox { @apply h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-500 rounded focus:ring-indigo-500 bg-white dark:bg-gray-700; }
 .form-text { @apply text-xs text-gray-500 dark:text-gray-400 mt-1; }
@@ -434,6 +528,7 @@ onMounted(() => {
 
 .image-preview { @apply max-w-[100px] max-h-[100px] mt-2 border border-gray-300 dark:border-gray-600 rounded object-contain; }
 .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .tag { @apply inline-block bg-gray-200 dark:bg-gray-700 rounded-full px-2 py-0.5 text-xs font-semibold text-gray-700 dark:text-gray-200 mr-1 mb-1; }
 .spinner { @apply inline-block w-8 h-8 border-4 border-t-indigo-600 dark:border-t-indigo-400 border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin; }
 .spinner-inline { @apply inline-block w-4 h-4 border-2 border-t-indigo-600 dark:border-t-indigo-300 border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin ml-2 align-middle; }
