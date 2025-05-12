@@ -7,6 +7,10 @@ const bodyParser = require('body-parser');
 
 const nftRoutes = require('./routes/nftRoutes');
 const designRoutes = require('./routes/designs');
+const authRoutes = require('./routes/authRoutes');
+const userRoutes = require('./routes/userRoutes');
+const taleRoutes = require('./routes/taleRoutes');
+const { taleNestedEpisodeRouter, individualEpisodeRouter } = require('./routes/episodeRoutes'); // <--- ADD THIS
 
 // Initialize Express app
 const app = express();
@@ -67,7 +71,10 @@ mongoose.connection.on('disconnected', () => {
 // Routes
 app.use('/api/nfts', nftRoutes);
 app.use('/api/designs', designRoutes); 
-
+app.use('/api/auth', authRoutes);     // <--- ADD THIS: Mount auth routes
+app.use('/api/users', userRoutes);   // <--- ADD THIS: Mount user routes
+app.use('/api/tales', taleRoutes);   // <--- ADD THIS: Mount tale routes
+app.use('/api/episodes', individualEpisodeRouter); // <--- ADD THIS for /api/episodes/:episodeId routes
 // Basic root route for health checks
 app.get('/', (req, res) => {
     res.status(200).send(`Numbered Edition NFT Backend Running - Status: OK - Timestamp: ${new Date().toISOString()}`);
