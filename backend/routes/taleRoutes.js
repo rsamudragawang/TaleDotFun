@@ -10,7 +10,7 @@ const {
 } = require('../controllers/taleController');
 // --- Nested Episode Routes ---
 // Re-route requests for /api/tales/:taleId/episodes to the taleNestedEpisodeRouter
-router.use('/:taleId/episodes', taleNestedEpisodeRouter);
+const { taleNestedEpisodeRouter } = require('./episodeRoutes'); // <--- ADD THIS
 // Bring in the authentication middleware
 // Assuming your authMiddleware.js is in '../middleware/authMiddleware.js'
 const { protect, authorize } = require('../middleware/authMiddleware');

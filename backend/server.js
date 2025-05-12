@@ -11,6 +11,7 @@ const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
 const taleRoutes = require('./routes/taleRoutes');
 const { taleNestedEpisodeRouter, individualEpisodeRouter } = require('./routes/episodeRoutes'); // <--- ADD THIS
+const mintActivityRoutes = require('./routes/mintActivityRoutes'); // <-- IMPORT NEW ROUTES
 
 // Initialize Express app
 const app = express();
@@ -75,6 +76,8 @@ app.use('/api/auth', authRoutes);     // <--- ADD THIS: Mount auth routes
 app.use('/api/users', userRoutes);   // <--- ADD THIS: Mount user routes
 app.use('/api/tales', taleRoutes);   // <--- ADD THIS: Mount tale routes
 app.use('/api/episodes', individualEpisodeRouter); // <--- ADD THIS for /api/episodes/:episodeId routes
+app.use('/api/mint-activities', mintActivityRoutes); // <-- USE NEW ROUTES
+
 // Basic root route for health checks
 app.get('/', (req, res) => {
     res.status(200).send(`Numbered Edition NFT Backend Running - Status: OK - Timestamp: ${new Date().toISOString()}`);

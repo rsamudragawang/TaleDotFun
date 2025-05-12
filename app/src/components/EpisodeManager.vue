@@ -10,6 +10,12 @@
       </button>
     </div>
 
+    <div v-if="uiMessage.text"
+         :class="uiMessage.type === 'error' ? 'error-box' : (uiMessage.type === 'success' ? 'success-box' : 'info-box')"
+         class="my-4 p-3 rounded-md text-center text-sm">
+      {{ uiMessage.text }}
+    </div>
+
     <div v-if="showEpisodeModal" class="modal-overlay">
       <div class="modal-content dark:bg-gray-800">
         <h3 class="text-xl font-bold mb-6 text-gray-800 dark:text-white">
@@ -20,9 +26,48 @@
             <label for="episodeName" class="form-label">Episode Name:</label>
             <input type="text" id="episodeName" v-model="currentEpisode.episodeName" class="form-input" required />
           </div>
-          <div>
-            <label for="episodeContent" class="form-label">Content (Optional):</label>
-            <textarea id="episodeContent" v-model="currentEpisode.content" class="form-textarea h-32"></textarea>
+
+          <div class="border-t dark:border-gray-700 pt-4 mt-4">
+            <label class="form-label flex items-center">
+              <input type="checkbox" v-model="currentEpisode.isNft" class="form-checkbox mr-2" />
+              This episode is linked to an NFT (requires mint to view full content)
+            </label>
+          </div>
+          <div v-if="currentEpisode.isNft" class="space-y-4 mt-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-md">
+            <div>
+              <label for="candyMachineIdModal" class="form-label">Associated Candy Machine ID (or NFT Mint Address):</label>
+              <input type="text" id="candyMachineIdModal" v-model="currentEpisode.candyMachineId" class="form-input" placeholder="Enter CM ID or NFT Mint" />
+              <small class="form-text">This ID determines access to content if 'Linked to NFT' is checked.</small>
+            </div>
+          </div>
+          <div v-if="!isEpisodeContentLockedForModal">
+            <div>
+              <label for="episodeContent" class="form-label">Content (Description):</label>
+              <textarea id="episodeContent" v-model="currentEpisode.content" class="form-textarea h-32"></textarea>
+            </div>
+            <div class="mt-4">
+              <label class="form-label">Episode Images (Max 10):</label>
+              <div v-for="(imgUrl, index) in currentEpisode.images" :key="index" class="flex items-center mb-2">
+                <input type="url" v-model="currentEpisode.images[index]" class="form-input flex-grow mr-2" placeholder="https://gateway.pinata.cloud/ipfs/..." />
+                <button type="button" @click="removeImageField(index)" class="btn btn-danger btn-xs p-1 leading-none">Remove</button>
+              </div>
+              <button type="button" @click="addImageField" v-if="currentEpisode.images.length < 10" class="btn btn-secondary btn-sm mt-1">
+                + Add Image URL
+              </button>
+              <div class="mt-2">
+                  <label for="episodeImageFiles" class="form-label">Or Upload New Images:</label>
+                  <input type="file" id="episodeImageFiles" @change="handleImageFilesChange" class="form-file-input" multiple accept="image/*" />
+                  <small class="form-text">Selected files will be uploaded to Pinata. URLs will be added above.</small>
+                  <div v-if="isUploadingImages" class="mt-2 text-sm text-indigo-600 dark:text-indigo-400">
+                      <span class="spinner-inline"></span> Uploading images to Pinata...
+                  </div>
+              </div>
+            </div>
+          </div>
+          <div v-else class="info-box">
+            Content and images for this NFT-linked episode are typically managed via its metadata on IPFS.
+            You can edit them here if you have minted this NFT.
+            <span v-if="!props.appUser" class="block mt-1">Please connect your wallet and log in.</span>
           </div>
           <div>
             <label for="episodeOrder" class="form-label">Order (Optional):</label>
@@ -36,43 +81,9 @@
             </select>
           </div>
 
-          <div class="border-t dark:border-gray-700 pt-4 mt-4">
-            <label class="form-label flex items-center">
-              <input type="checkbox" v-model="currentEpisode.isNft" class="form-checkbox mr-2" />
-              Is this episode an NFT?
-            </label>
-          </div>
-
-          <div v-if="currentEpisode.isNft" class="space-y-4 mt-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-md">
-            <div>
-              <label for="candyMachineId" class="form-label">Candy Machine ID (Optional):</label>
-              <input type="text" id="candyMachineId" v-model="currentEpisode.candyMachineId" class="form-input" placeholder="Enter CM ID if applicable" />
-            </div>
-          </div>
-
-          <div class="mt-4">
-            <label class="form-label">Images (Max 10, URLs from Pinata):</label>
-            <div v-for="(imgUrl, index) in currentEpisode.images" :key="index" class="flex items-center mb-2">
-              <input type="url" v-model="currentEpisode.images[index]" class="form-input flex-grow mr-2" placeholder="https://gateway.pinata.cloud/ipfs/..." />
-              <button type="button" @click="removeImageField(index)" class="btn btn-danger btn-xs p-1 leading-none">Remove</button>
-            </div>
-            <button type="button" @click="addImageField" v-if="currentEpisode.images.length < 10" class="btn btn-secondary btn-sm mt-1">
-              + Add Image URL
-            </button>
-            <div class="mt-2">
-                <label for="episodeImageFiles" class="form-label">Or Upload New Images (to get URLs):</label>
-                <input type="file" id="episodeImageFiles" @change="handleImageFilesChange" class="form-file-input" multiple accept="image/*" />
-                <small class="form-text">Selected files will be uploaded to Pinata. URLs will be added above once uploaded.</small>
-                <div v-if="isUploadingImages" class="mt-2 text-sm text-indigo-600 dark:text-indigo-400">
-                    <span class="spinner-inline"></span> Uploading images to Pinata...
-                </div>
-            </div>
-          </div>
-
-
           <div class="flex justify-end space-x-3 mt-6 pt-4 border-t dark:border-gray-700">
             <button type="button" @click="closeEpisodeModal" class="btn btn-secondary">Cancel</button>
-            <button type="submit" :disabled="isSavingEpisode" class="btn btn-success">
+            <button type="submit" :disabled="isSavingEpisode || isUploadingImages" class="btn btn-success">
               {{ isSavingEpisode ? 'Saving...' : (editingEpisode ? 'Update Episode' : 'Create Episode') }}
             </button>
           </div>
@@ -91,18 +102,32 @@
     <div v-else class="space-y-4">
       <div v-for="episode in episodes" :key="episode._id" class="episode-item p-4 bg-white dark:bg-gray-800 rounded-lg shadow flex justify-between items-start">
         <div>
-          <h4 class="text-lg font-semibold text-indigo-700 dark:text-indigo-400">{{ episode.episodeName }} (Order: {{episode.order}})</h4>
-          <p class="text-sm text-gray-600 dark:text-gray-400 line-clamp-2" v-if="episode.content">{{ episode.content }}</p>
-          <div class="mt-2">
-            <span v-if="episode.isNft" class="tag bg-purple-200 dark:bg-purple-700 text-purple-800 dark:text-purple-100">NFT</span>
-            <span class="tag bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200">{{episode.status}}</span>
-            <p v-if="episode.isNft && episode.candyMachineId" class="text-xs text-gray-500 dark:text-gray-400 mt-1">CM ID: {{ shortenAddress(episode.candyMachineId, 8) }}</p>
+          <h4 class="text-lg font-semibold text-indigo-700 dark:text-indigo-400">{{ episode.episodeName }} (Order: {{episode.order !== undefined ? episode.order : 'N/A'}})</h4>
+          
+          <p v-if="!isContentLockedForListedEpisode(episode)" class="text-sm text-gray-600 dark:text-gray-400 line-clamp-2" v-html="episode.content ? renderMarkdownMini(episode.content) : 'No content provided.'"></p>
+          <div v-else class="text-sm text-gray-500 dark:text-gray-400 italic my-2">
+            Full content available after minting this NFT episode.
+            <a v-if="episode.candyMachineId" :href="`/mint/${episode.candyMachineId}`" class="link ml-1">Mint Now</a>
           </div>
-          <div v-if="episode.images && episode.images.length > 0" class="mt-2 flex flex-wrap gap-2">
+
+          <div class="mt-2">
+            <span v-if="episode.isNft" class="tag bg-purple-200 dark:bg-purple-700 text-purple-800 dark:text-purple-100">🔗 NFT-Linked</span>
+            <span v-if="episode.isNft && episode.candyMachineId" class="tag bg-teal-200 dark:bg-teal-700 text-teal-800 dark:text-teal-100">
+              Ref: {{shortenAddress(episode.candyMachineId, 4)}}
+            </span>
+            <span class="tag bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200">{{episode.status}}</span>
+          </div>
+
+          <div v-if="!isContentLockedForListedEpisode(episode) && episode.images && episode.images.length > 0" class="mt-2 flex flex-wrap gap-2">
             <a v-for="(img, idx) in episode.images" :key="idx" :href="img" target="_blank" class="hover:opacity-80">
               <img :src="img" alt="Episode Image" class="h-16 w-16 object-cover rounded border dark:border-gray-600" @error="setDefaultImage" />
             </a>
           </div>
+           <div v-else-if="isContentLockedForListedEpisode(episode) && episode.images && episode.images.length > 0" class="mt-2">
+             <img :src="episode.images[0]" @error="setDefaultImage" alt="Episode Thumbnail" class="h-16 w-16 object-cover rounded border dark:border-gray-600 opacity-50" />
+             <small class="text-xs text-gray-400 dark:text-gray-500 italic ml-2">More images after mint.</small>
+          </div>
+
         </div>
         <div v-if="isAuthorAndCreator" class="flex flex-col sm:flex-row items-end sm:items-center gap-2 mt-2 sm:mt-0 ml-2 flex-shrink-0">
           <button @click="editEpisode(episode)" class="btn btn-warning btn-xs">Edit</button>
@@ -115,33 +140,23 @@
 
 <script setup>
 import { ref, onMounted, computed, watch, defineProps } from 'vue';
-import { useWallet } from 'solana-wallets-vue'; // Assuming global wallet setup
 import axios from 'axios';
-import { uploadFileToIPFS } from '../services/pinataService'; // Adjust path
+import { uploadFileToIPFS } from '../services/pinataService';
+import { marked } from 'marked'; // For rendering markdown
 
-// Props
 const props = defineProps({
-  parentTale: { // Pass the parent Tale object to this component
-    type: Object,
-    required: true,
-  },
-  appUser: { // Pass the currently authenticated app user object
-    type: Object,
-    default: null,
-  }
+  parentTale: { type: Object, required: true },
+  appUser: { type: Object, default: null },
+  userMintActivities: { type: Array, default: () => [] } // New prop for user's mints
 });
 
-const wallet = useWallet();
-
-// Configuration
-const API_BASE_URL = import.meta.env.VITE_APP_AUTH_API_URL || 'http://localhost:3000/api'; // Base URL for your backend
+const API_BASE_URL = import.meta.env.VITE_APP_AUTH_API_URL || 'http://localhost:3000/api';
 const JWT_TOKEN_KEY = 'readium_fun_jwt_token';
 
-// Episode State
 const episodes = ref([]);
 const isLoadingEpisodes = ref(false);
 const showEpisodeModal = ref(false);
-const editingEpisode = ref(null); // Episode object if editing
+const editingEpisode = ref(null);
 const isSavingEpisode = ref(false);
 const isUploadingImages = ref(false);
 
@@ -156,64 +171,86 @@ const defaultEpisode = () => ({
 });
 const currentEpisode = ref(defaultEpisode());
 
-// UI Message
 const uiMessage = ref({ text: '', type: 'info' });
-function showUiMessage(msg, type = 'info', duration = 4000) { /* ... (implementation from auth.vue) ... */
+function showUiMessage(msg, type = 'info', duration = 4000) {
   uiMessage.value = { text: msg, type };
   if (duration > 0) {
     setTimeout(() => { uiMessage.value = { text: '', type: 'info' }; }, duration);
   }
 }
-const shortenAddress = (address, chars = 6) => { /* ... (implementation from auth.vue) ... */
+const shortenAddress = (address, chars = 6) => {
   if (!address) return '';
   return `${address.slice(0, chars)}...${address.slice(-chars)}`;
 };
 const setDefaultImage = (event) => {
   event.target.src = 'https://placehold.co/100x100/gray/white?text=Error';
 };
+const renderMarkdownMini = (markdownText) => {
+    if (!markdownText) return '';
+    // Simple preview: take first N characters, strip markdown for plain text preview
+    const plainText = marked(markdownText).replace(/<[^>]+>/g, '');
+    return plainText.length > 100 ? plainText.substring(0, 100) + '...' : plainText;
+};
 
-// Computed property to check if the current appUser is the author of the parentTale AND a creator
+
 const isAuthorAndCreator = computed(() => {
   return props.appUser &&
          props.parentTale &&
-         (props.appUser.id === props.parentTale.author._id || props.appUser.walletAddress === props.parentTale.authorWalletAddress) && // Check both ID and walletAddress for safety
+         (props.appUser.id === props.parentTale.author?._id || props.appUser.walletAddress === props.parentTale.authorWalletAddress) &&
          props.appUser.type === 'creator';
 });
 
+// Computed property to check if content should be locked in the MODAL
+const isEpisodeContentLockedForModal = computed(() => {
+  if (!currentEpisode.value.isNft) return false; // Not an NFT, not locked
+  if (isAuthorAndCreator.value) return false; // Author can always edit
 
-// API Client for Episodes
-const episodeApiClient = axios.create({
-  baseURL: API_BASE_URL,
+  if (!props.appUser || !props.appUser.walletAddress) return true; // Not logged in, locked
+
+  // Check if user has minted this specific NFT episode
+  return !props.userMintActivities.some(
+    activity => activity.candyMachineId === currentEpisode.value.candyMachineId &&
+                activity.userWalletAddress === props.appUser.walletAddress
+  );
 });
+
+// Method to check if content should be locked for a LISTED episode
+const isContentLockedForListedEpisode = (episode) => {
+  if (!episode.isNft) return false; // Not an NFT, not locked
+  if (isAuthorAndCreator.value && props.appUser?.id === episode.author) return false; // Author can always view their own
+
+  if (!props.appUser || !props.appUser.walletAddress) return true; // Not logged in, locked
+
+  return !props.userMintActivities.some(
+    activity => activity.candyMachineId === episode.candyMachineId &&
+                activity.userWalletAddress === props.appUser.walletAddress
+  );
+};
+
+
+const episodeApiClient = axios.create({ baseURL: API_BASE_URL });
 episodeApiClient.interceptors.request.use(config => {
   const token = localStorage.getItem(JWT_TOKEN_KEY);
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
+  if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 episodeApiClient.interceptors.response.use(
   response => response.data,
   error => {
-    console.error('API Error (Episodes):', error.response || error.message || error);
-    const message = error.response?.data?.message || error.message || 'An API error occurred with episodes.';
+    const message = error.response?.data?.message || error.message || 'An API error occurred.';
     showUiMessage(message, 'error');
     return Promise.reject(error.response?.data || { message });
   }
 );
 
-// --- Episode CRUD Functions ---
 async function fetchEpisodesForTale() {
   if (!props.parentTale?._id) return;
   isLoadingEpisodes.value = true;
   try {
-    // GET /api/tales/:taleId/episodes
     const response = await episodeApiClient.get(`/tales/${props.parentTale._id}/episodes`);
     if (response.success) {
-      episodes.value = response.data;
+      episodes.value = response.data.sort((a, b) => (a.order || 0) - (b.order || 0));
     }
-  } catch (error) {
-    // Error message handled by interceptor
   } finally {
     isLoadingEpisodes.value = false;
   }
@@ -221,24 +258,24 @@ async function fetchEpisodesForTale() {
 
 function openEpisodeModal(episodeToEdit = null) {
   if (!isAuthorAndCreator.value) {
-    showUiMessage("You are not authorized to manage episodes for this tale.", "error");
+    showUiMessage("You are not authorized.", "error");
     return;
   }
   if (episodeToEdit) {
-    editingEpisode.value = { ...episodeToEdit }; // Copy
-    currentEpisode.value = { // Populate form
+    editingEpisode.value = { ...episodeToEdit };
+    currentEpisode.value = {
       episodeName: episodeToEdit.episodeName,
       content: episodeToEdit.content || '',
-      images: [...(episodeToEdit.images || [])], // Ensure it's a new array
+      images: [...(episodeToEdit.images || [])],
       isNft: episodeToEdit.isNft || false,
       candyMachineId: episodeToEdit.candyMachineId || '',
-      order: episodeToEdit.order || 0,
+      order: episodeToEdit.order === undefined ? episodes.value.length : episodeToEdit.order,
       status: episodeToEdit.status || 'draft',
     };
   } else {
     editingEpisode.value = null;
     currentEpisode.value = defaultEpisode();
-    currentEpisode.value.order = episodes.value.length; // Default order to next
+    currentEpisode.value.order = episodes.value.length;
   }
   showEpisodeModal.value = true;
 }
@@ -247,47 +284,44 @@ function closeEpisodeModal() {
   showEpisodeModal.value = false;
   editingEpisode.value = null;
   currentEpisode.value = defaultEpisode();
-  // Clear file input if you have a ref to it: document.getElementById('episodeImageFiles').value = null;
+  const fileInput = document.getElementById('episodeImageFiles');
+  if (fileInput) fileInput.value = null;
 }
 
 async function handleImageFilesChange(event) {
     const files = event.target.files;
     if (!files || files.length === 0) return;
     if (currentEpisode.value.images.length + files.length > 10) {
-        showUiMessage("Cannot add more than 10 images in total.", "warning");
+        showUiMessage("Max 10 images.", "warning");
         return;
     }
-
     isUploadingImages.value = true;
-    showUiMessage(`Uploading ${files.length} image(s) to Pinata...`, "info", 0);
-
+    showUiMessage(`Uploading ${files.length} image(s)...`, "info", 0);
     const uploadedUrls = [];
-    for (const file of files) {
-        try {
-            const uploadResult = await uploadFileToIPFS(file); // From pinataService.js
+    try {
+        for (const file of files) {
+            const uploadResult = await uploadFileToIPFS(file);
             if (uploadResult.success && uploadResult.imageUrl) {
                 uploadedUrls.push(uploadResult.imageUrl);
             } else {
                 throw new Error(uploadResult.error || `Failed to upload ${file.name}`);
             }
-        } catch (uploadError) {
-            showUiMessage(`Image upload failed for ${file.name}: ${uploadError.message}`, "error");
-            isUploadingImages.value = false;
-            return; // Stop if any upload fails
         }
+        currentEpisode.value.images.push(...uploadedUrls);
+        showUiMessage(`${uploadedUrls.length} image(s) uploaded.`, "success");
+    } catch (uploadError) {
+        showUiMessage(`Image upload failed: ${uploadError.message}`, "error");
+    } finally {
+        isUploadingImages.value = false;
+        event.target.value = null;
     }
-    currentEpisode.value.images.push(...uploadedUrls);
-    isUploadingImages.value = false;
-    showUiMessage(`${uploadedUrls.length} image(s) uploaded and URLs added.`, "success");
-    event.target.value = null; // Reset file input
 }
-
 
 function addImageField() {
   if (currentEpisode.value.images.length < 10) {
     currentEpisode.value.images.push('');
   } else {
-    showUiMessage("Maximum 10 images allowed per episode.", "warning");
+    showUiMessage("Max 10 images.", "warning");
   }
 }
 function removeImageField(index) {
@@ -296,88 +330,83 @@ function removeImageField(index) {
 
 async function handleSaveEpisode() {
   if (!props.parentTale?._id) {
-    showUiMessage("Parent tale information is missing.", "error");
+    showUiMessage("Parent tale missing.", "error");
     return;
   }
   isSavingEpisode.value = true;
-
   const payload = {
     ...currentEpisode.value,
-    images: currentEpisode.value.images.filter(imgUrl => imgUrl && imgUrl.trim() !== ''), // Filter out empty strings
+    images: currentEpisode.value.images.filter(imgUrl => imgUrl && imgUrl.trim() !== ''),
   };
   if (!payload.isNft) {
-    delete payload.candyMachineId; // Don't send CM ID if not an NFT
+    payload.candyMachineId = '';
+  } else if (payload.isNft && !payload.candyMachineId) {
+    // If it IS an NFT but no ID is provided by the author, it's okay,
+    // content will be locked for others until an ID is set and they mint.
+    // Author can still edit/add content.
+    console.info("Saving NFT-linked episode without a Candy Machine ID. Content will be locked for non-authors/non-minters.");
   }
-
 
   try {
     let response;
     if (editingEpisode.value) {
-      // PUT /api/episodes/:episodeId
       response = await episodeApiClient.put(`/episodes/${editingEpisode.value._id}`, payload);
-      showUiMessage("Episode updated successfully!", "success");
+      showUiMessage("Episode updated!", "success");
     } else {
-      // POST /api/tales/:taleId/episodes
       response = await episodeApiClient.post(`/tales/${props.parentTale._id}/episodes`, payload);
-      showUiMessage("Episode created successfully!", "success");
+      showUiMessage("Episode created!", "success");
     }
     if (response.success) {
       fetchEpisodesForTale();
       closeEpisodeModal();
     }
-  } catch (error) {
-    // Error already shown by interceptor
   } finally {
     isSavingEpisode.value = false;
   }
 }
 
 async function confirmDeleteEpisode(episodeId) {
-  if (window.confirm("Are you sure you want to delete this episode?")) {
+  if (window.confirm("Delete this episode?")) {
     try {
-      // DELETE /api/episodes/:episodeId
       const response = await episodeApiClient.delete(`/episodes/${episodeId}`);
       if (response.success) {
-        showUiMessage("Episode deleted successfully.", "success");
+        showUiMessage("Episode deleted.", "success");
         fetchEpisodesForTale();
       }
-    } catch (error) {
-      // Error shown by interceptor
-    }
+    } catch (error) { /* Handled by interceptor */ }
   }
 }
 
-// Watch for parentTale changes to reload episodes
 watch(() => props.parentTale?._id, (newTaleId, oldTaleId) => {
   if (newTaleId && newTaleId !== oldTaleId) {
-    episodes.value = []; // Clear previous episodes
+    episodes.value = [];
     fetchEpisodesForTale();
   }
-}, { immediate: true }); // Fetch on component mount if parentTale is already available
+}, { immediate: true });
 
-// Also watch for appUser changes, especially if parentTale might be available before appUser
-watch(() => props.appUser?.id, (newUserId) => {
-    if (newUserId && props.parentTale?._id && episodes.value.length === 0 && !isLoadingEpisodes.value) {
-        // If user is resolved and episodes haven't been loaded yet for the current tale
-        fetchEpisodesForTale();
+watch(() => props.appUser?.id, () => {
+    if (props.parentTale?._id) {
+        fetchEpisodesForTale(); // Re-fetch if user changes, as their mint status might affect display
     }
 });
+watch(() => props.userMintActivities, () => {
+    // If mint activities change, re-evaluate display, though this is mostly handled by computed props
+    // No direct action needed here unless you want to force re-render, which Vue handles.
+}, { deep: true });
 
 
 onMounted(() => {
-  if (props.parentTale?._id && props.appUser) { // Ensure both are available
+  if (props.parentTale?._id) {
     fetchEpisodesForTale();
-  } else if (!props.parentTale?._id) {
+  } else {
     console.warn("EpisodeManager: Parent Tale ID not provided on mount.");
-  } else if (!props.appUser) {
-    console.warn("EpisodeManager: App user not available on mount. Episodes might not load if permissions depend on it.");
   }
 });
 
 </script>
 
 <style scoped>
-/* Using Tailwind utility classes directly in the template. */
+/* Styles from previous EpisodeManager.vue */
 .form-label { @apply block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1; }
 .form-input, .form-select, .form-textarea { @apply mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100; }
 .form-file-input { @apply mt-1 block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 dark:file:bg-indigo-800 file:text-indigo-700 dark:file:text-indigo-300 hover:file:bg-indigo-100 dark:hover:file:bg-indigo-700; }
@@ -399,14 +428,15 @@ onMounted(() => {
 .success-box { @apply p-3 bg-green-50 dark:bg-green-700/30 text-green-700 dark:text-green-300 rounded-md border border-green-200 dark:border-green-500/50 text-sm; }
 .link { @apply text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300 underline; }
 
-.modal-overlay { @apply fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-[60]; } /* Increased z-index */
-.modal-content { @apply bg-white p-6 rounded-lg shadow-xl max-w-xl w-full max-h-[90vh] overflow-y-auto; }
+
+.modal-overlay { @apply fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-[60]; }
+.modal-content { @apply bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-xl w-full max-h-[90vh] overflow-y-auto; }
 
 .image-preview { @apply max-w-[100px] max-h-[100px] mt-2 border border-gray-300 dark:border-gray-600 rounded object-contain; }
 .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .tag { @apply inline-block bg-gray-200 dark:bg-gray-700 rounded-full px-2 py-0.5 text-xs font-semibold text-gray-700 dark:text-gray-200 mr-1 mb-1; }
 .spinner { @apply inline-block w-8 h-8 border-4 border-t-indigo-600 dark:border-t-indigo-400 border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin; }
-.spinner-inline { @apply inline-block w-4 h-4 border-2 border-t-white border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin ml-2 align-middle; }
+.spinner-inline { @apply inline-block w-4 h-4 border-2 border-t-indigo-600 dark:border-t-indigo-300 border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin ml-2 align-middle; }
 
 .prose :deep(h1), .prose :deep(h2), .prose :deep(h3) { @apply mb-2 mt-4 font-semibold; }
 .prose :deep(p) { @apply mb-3 leading-relaxed; }

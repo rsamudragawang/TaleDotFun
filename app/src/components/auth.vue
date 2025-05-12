@@ -25,7 +25,7 @@
           <select id="typeInput" v-model="userType" class="input-field-auth">
             <option value="user">User</option>
             <option value="creator">Creator</option>
-            <option value="customer">Customer</option>
+            <!-- <option value="customer">Customer</option> -->
           </select>
         </div>
         <button type="submit" :disabled="isLoadingAuth" class="btn btn-primary w-full disabled:opacity-50">
@@ -82,7 +82,7 @@ const showRegistrationForm = ref(false);
 const isAuthenticated = computed(() => !!token.value && !!currentUser.value);
 
 // Form Inputs for registration
-const name = ref('');
+const name = ref('testingUser');
 const userType = ref('user');
 
 // UI Message
@@ -199,7 +199,7 @@ async function checkAuthStateForCurrentWallet() {
       currentUser.value = autoLoginResult.data;
       showUiMessage('Welcome back!', 'success');
       // REMOVED: navigateToNext(); 
-    } else if (autoLoginResult.success && autoLoginResult.known === false) {
+    } else if (!autoLoginResult.success) {
       showUiMessage('New wallet detected. Please complete your profile.', 'info');
       showRegistrationForm.value = true;
     } else {

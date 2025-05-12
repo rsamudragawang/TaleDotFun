@@ -176,7 +176,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch,defineEmits } from 'vue';
 import { useWallet, WalletMultiButton } from 'solana-wallets-vue';
 import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
 import { walletAdapterIdentity } from '@metaplex-foundation/umi-signer-wallet-adapters';
@@ -215,7 +215,7 @@ const RPC_ENDPOINT = import.meta.env.VITE_RPC_ENDPOINT || 'https://api.devnet.so
 const WALLET_PLACEHOLDER = "YOUR_WALLET_ADDRESS_PLACEHOLDER";
 
 const wallet = useWallet(); // wallet.publicKey.value is a SolanaWeb3JsPublicKey | null
-
+const emit = defineEmits(['candyMachineCreated']);
 const isLoading = ref(false);
 const successMessage = ref('');
 const errorMessage = ref('');
@@ -617,7 +617,7 @@ async function handleCreateCandyMachine() {
     }
     successMessage.value += `All ${items.value.length} items inserted successfully!`;
     console.log("All items inserted.");
-
+    emit('candyMachineCreated', candyMachine.publicKey.toString());
   } catch (e: any) {
     console.error("Creation failed:", e);
     let detailedMessage = e.message || 'An unknown error occurred during creation.';
