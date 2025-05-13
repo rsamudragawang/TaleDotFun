@@ -1,59 +1,59 @@
 <template>
-  <div class="container mx-auto p-4 md:p-8 max-w-2xl bg-white dark:bg-gray-800 shadow-lg rounded-lg">
-    <h1 class="text-3xl font-bold text-center text-gray-800 dark:text-white mb-8">User Authentication</h1>
+  <div class="auth-container">
+    <h1 class="auth-title">User Authentication</h1>
 
-    <div class="mb-6 p-4 border border-gray-200 dark:border-gray-700 rounded-md">
-      <h2 class="text-xl font-semibold text-gray-700 dark:text-gray-200 mb-3">Wallet Connection</h2>
-      <div class="flex justify-center my-4">
+    <div class="auth-section wallet-section">
+      <h2 class="section-title">Wallet Connection</h2>
+      <div class="wallet-button-wrapper">
         <WalletMultiButton />
       </div>
-      <div v-if="wallet.connected.value && wallet.publicKey.value" class="info-box mt-3 text-center">
-        Connected: <span class="font-mono text-sm">{{ shortenAddress(wallet.publicKey.value.toBase58()) }}</span>
+      <div v-if="wallet.connected.value && wallet.publicKey.value" class="info-box connected-wallet-info">
+        Connected: <span class="wallet-address">{{ shortenAddress(wallet.publicKey.value.toBase58()) }}</span>
       </div>
     </div>
 
-    <div v-if="wallet.connected.value && !isAuthenticated && showRegistrationForm" class="mb-6 p-4 border border-gray-200 dark:border-gray-700 rounded-md">
-      <h2 class="text-xl font-semibold text-gray-700 dark:text-gray-200 mb-3">Complete Your Profile</h2>
-      <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">Welcome! Please provide a display name to finish setting up your account.</p>
-      <form @submit.prevent="handleCompleteRegistration" class="space-y-4">
+    <div v-if="wallet.connected.value && !isAuthenticated && showRegistrationForm" class="auth-section registration-section">
+      <h2 class="section-title">Complete Your Profile</h2>
+      <p class="registration-prompt">Welcome! Please provide a display name to finish setting up your account.</p>
+      <form @submit.prevent="handleCompleteRegistration" class="auth-form">
         <div>
-          <label for="nameInput" class="label">Your Name:</label>
-          <input type="text" id="nameInput" v-model="name" class="input-field-auth" placeholder="Enter your display name" required>
+          <label for="nameInput" class="form-label">Your Name:</label>
+          <input type="text" id="nameInput" v-model="name" class="form-input-auth" placeholder="Enter your display name" required>
         </div>
         <div>
-          <label for="typeInput" class="label">User Type (optional):</label>
-          <select id="typeInput" v-model="userType" class="input-field-auth">
+          <label for="typeInput" class="form-label">User Type (optional):</label>
+          <select id="typeInput" v-model="userType" class="form-input-auth">
             <option value="user">User</option>
             <option value="creator">Creator</option>
-            <!-- <option value="customer">Customer</option> -->
+            <option value="customer">Customer</option>
           </select>
         </div>
-        <button type="submit" :disabled="isLoadingAuth" class="btn btn-primary w-full disabled:opacity-50">
+        <button type="submit" :disabled="isLoadingAuth" class="btn btn-primary form-submit-button">
           {{ isLoadingAuth ? 'Registering...' : 'Register and Login' }}
         </button>
       </form>
     </div>
 
-    <div v-if="isAuthenticated" class="mb-6 p-4 border border-gray-200 dark:border-gray-700 rounded-md text-center">
-      <h2 class="text-xl font-semibold text-gray-700 dark:text-gray-200 mb-3">Welcome Back!</h2>
-      <div v-if="currentUser" class="info-box space-y-1">
+    <div v-if="isAuthenticated" class="auth-section welcome-section">
+      <h2 class="section-title">Welcome Back!</h2>
+      <div v-if="currentUser" class="info-box user-details">
         <p><strong>Name:</strong> {{ currentUser.name }}</p>
-        <p><strong>Wallet:</strong> <span class="font-mono text-sm">{{ shortenAddress(currentUser.walletAddress) }}</span></p>
+        <p><strong>Wallet:</strong> <span class="wallet-address">{{ shortenAddress(currentUser.walletAddress) }}</span></p>
         <p>You are successfully authenticated.</p>
       </div>
-      <button @click="goToCreateCandyMachine" class="btn btn-primary w-full mt-4">
-          Proceed to Create Candy Machine
+      <button @click="goToCreateCandyMachine" class="btn btn-primary action-button">
+        Proceed to Create Candy Machine
       </button>
-      <button @click="performLogout" class="btn btn-danger w-full mt-3">Logout from App</button>
+      <button @click="performLogout" class="btn btn-danger action-button logout-button">Logout from App</button>
     </div>
 
-    <div v-if="wallet.connected.value && !isAuthenticated && !showRegistrationForm && isLoadingAuth" class="mb-6 p-4 info-box text-center">
+    <div v-if="wallet.connected.value && !isAuthenticated && !showRegistrationForm && isLoadingAuth" class="auth-section loading-message">
         Verifying account status...
     </div>
 
     <div v-if="uiMessage.text"
-         :class="uiMessage.type === 'error' ? 'error-box' : (uiMessage.type === 'success' ? 'success-box' : 'info-box')"
-         class="mt-6 p-3 rounded-md text-center">
+         :class="['ui-message-box', uiMessage.type === 'error' ? 'error-box' : (uiMessage.type === 'success' ? 'success-box' : 'info-box')]"
+         >
       {{ uiMessage.text }}
     </div>
   </div>
@@ -262,14 +262,292 @@ onMounted(() => {
 </script>
 
 <style scoped>
-/* Styles remain the same */
-.label { @apply block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1; }
-.input-field-auth { @apply w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100; }
-.btn { @apply px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed; }
-.btn-primary { @apply bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400 disabled:bg-indigo-300 dark:disabled:bg-indigo-700; }
-.btn-secondary { @apply bg-gray-600 hover:bg-gray-700 focus:ring-gray-500 dark:bg-gray-500 dark:hover:bg-gray-400 disabled:bg-gray-300 dark:disabled:bg-gray-700; }
-.btn-danger { @apply bg-red-600 hover:bg-red-700 focus:ring-red-500 dark:bg-red-500 dark:hover:bg-red-400 disabled:bg-red-300 dark:disabled:bg-red-700; }
-.info-box { @apply mt-2 p-3 bg-gray-100 dark:bg-gray-700 rounded-md border border-gray-200 dark:border-gray-600 text-sm text-gray-700 dark:text-gray-200; }
-.error-box { @apply mt-2 p-3 bg-red-100 dark:bg-red-700/30 text-red-700 dark:text-red-300 rounded-md border border-red-200 dark:border-red-500/50 text-sm; }
-.success-box { @apply mt-2 p-3 bg-green-100 dark:bg-green-700/30 text-green-700 dark:text-green-300 rounded-md border border-green-200 dark:border-green-500/50 text-sm; }
+/* Main Container */
+.auth-container {
+  max-width: 42rem; /* max-w-2xl */
+  margin-left: auto;
+  margin-right: auto;
+  padding: 1rem; /* p-4 */
+  background-color: #ffffff; /* bg-white */
+  box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05); /* shadow-lg */
+  border-radius: 0.5rem; /* rounded-lg */
+}
+@media (min-width: 768px) { /* md: */
+  .auth-container {
+    padding: 2rem; /* md:p-8 */
+  }
+}
+@media (prefers-color-scheme: dark) {
+  .auth-container {
+    background-color: #1f2937; /* dark:bg-gray-800 */
+  }
+}
+
+/* Titles */
+.auth-title {
+  font-size: 1.875rem; /* text-3xl */
+  line-height: 2.25rem;
+  font-weight: 700; /* font-bold */
+  text-align: center;
+  color: #1f2937; /* text-gray-800 */
+  margin-bottom: 2rem; /* mb-8 */
+}
+@media (prefers-color-scheme: dark) {
+  .auth-title {
+    color: #ffffff; /* dark:text-white */
+  }
+}
+
+.section-title {
+  font-size: 1.25rem; /* text-xl */
+  line-height: 1.75rem;
+  font-weight: 600; /* font-semibold */
+  color: #374151; /* text-gray-700 */
+  margin-bottom: 0.75rem; /* mb-3 */
+}
+@media (prefers-color-scheme: dark) {
+  .section-title {
+    color: #e5e7eb; /* dark:text-gray-200 */
+  }
+}
+
+/* Sections */
+.auth-section {
+  margin-bottom: 1.5rem; /* mb-6 */
+  padding: 1rem; /* p-4 */
+  border: 1px solid #e5e7eb; /* border-gray-200 */
+  border-radius: 0.375rem; /* rounded-md */
+}
+@media (prefers-color-scheme: dark) {
+  .auth-section {
+    border-color: #374151; /* dark:border-gray-700 */
+  }
+}
+.welcome-section, .loading-message {
+  text-align: center;
+}
+
+/* Wallet Section */
+.wallet-button-wrapper {
+  display: flex;
+  justify-content: center;
+  margin-top: 1rem; /* my-4 */
+  margin-bottom: 1rem;
+}
+.connected-wallet-info { /* Extends .info-box */
+  margin-top: 0.75rem; /* mt-3 */
+  text-align: center;
+}
+.wallet-address {
+  font-family: monospace;
+  font-size: 0.875rem; /* text-sm */
+}
+
+/* Registration Section */
+.registration-prompt {
+  font-size: 0.875rem; /* text-sm */
+  color: #4b5563; /* text-gray-600 */
+  margin-bottom: 0.75rem; /* mb-3 */
+}
+@media (prefers-color-scheme: dark) {
+  .registration-prompt {
+    color: #9ca3af; /* dark:text-gray-400 */
+  }
+}
+.auth-form > div:not(:last-child) { /* Replicates space-y-4 */
+    margin-bottom: 1rem;
+}
+.form-submit-button {
+  width: 100%; /* w-full */
+}
+.form-submit-button:disabled {
+  opacity: 0.5; /* disabled:opacity-50 */
+}
+
+
+/* Welcome Section */
+.user-details { /* Extends .info-box */
+  /* space-y-1 equivalent for p tags */
+}
+.user-details p:not(:last-child) {
+    margin-bottom: 0.25rem;
+}
+.action-button {
+  width: 100%; /* w-full */
+  margin-top: 1rem; /* mt-4 for first, mt-3 for second */
+}
+.logout-button {
+  margin-top: 0.75rem; /* mt-3 */
+}
+
+
+/* Form Elements (from original @apply rules) */
+.form-label {
+  display: block;
+  font-size: 0.875rem; /* text-sm */
+  line-height: 1.25rem;
+  font-weight: 500; /* font-medium */
+  color: #374151; /* text-gray-700 */
+  margin-bottom: 0.25rem; /* mb-1 */
+}
+@media (prefers-color-scheme: dark) {
+  .form-label {
+    color: #d1d5db; /* dark:text-gray-300 */
+  }
+}
+
+.form-input-auth {
+  width: 100%;
+  padding-left: 0.75rem; /* px-3 */
+  padding-right: 0.75rem;
+  padding-top: 0.5rem; /* py-2 */
+  padding-bottom: 0.5rem;
+  border: 1px solid #d1d5db; /* border-gray-300 */
+  border-radius: 0.375rem; /* rounded-md */
+  box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05); /* shadow-sm */
+  font-size: 0.875rem; /* sm:text-sm */
+  background-color: #ffffff; /* bg-white */
+  color: #111827; /* text-gray-900 */
+}
+.form-input-auth:focus {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  border-color: #6366f1; /* focus:border-indigo-500 */
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.5); /* focus:ring-indigo-500 */
+}
+@media (prefers-color-scheme: dark) {
+  .form-input-auth {
+    border-color: #4b5568; /* dark:border-gray-600 */
+    background-color: #374151; /* dark:bg-gray-700 */
+    color: #f3f4f6; /* dark:text-gray-100 */
+  }
+}
+
+/* Buttons (from original @apply rules) */
+.btn {
+  padding: 0.5rem 1rem; /* px-4 py-2 */
+  border: 1px solid transparent;
+  border-radius: 0.375rem; /* rounded-md */
+  box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05); /* shadow-sm */
+  font-size: 0.875rem; /* text-sm */
+  font-weight: 500; /* font-medium */
+  color: #ffffff; /* text-white */
+  cursor: pointer;
+  transition: background-color 0.15s ease-in-out;
+}
+.btn:focus {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px #6366f1; /* focus:ring-2 focus:ring-offset-2 */
+}
+.btn:disabled {
+  cursor: not-allowed;
+  /* opacity is handled by specific button types */
+}
+
+.btn-primary {
+  background-color: #4f46e5; /* bg-indigo-600 */
+}
+.btn-primary:hover {
+  background-color: #4338ca; /* hover:bg-indigo-700 */
+}
+.btn-primary:focus { /* Specific focus ring color */
+   box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px #4f46e5; /* focus:ring-indigo-500 */
+}
+.btn-primary:disabled {
+  background-color: #a5b4fc; /* disabled:bg-indigo-300 */
+}
+@media (prefers-color-scheme: dark) {
+  .btn-primary {
+    background-color: #6366f1; /* dark:bg-indigo-500 */
+  }
+  .btn-primary:hover {
+    background-color: #818cf8; /* dark:hover:bg-indigo-400 */
+  }
+   .btn-primary:disabled {
+    background-color: #3730a3; /* dark:disabled:bg-indigo-700 */
+  }
+}
+
+.btn-danger {
+  background-color: #dc2626; /* bg-red-600 */
+}
+.btn-danger:hover {
+  background-color: #b91c1c; /* hover:bg-red-700 */
+}
+.btn-danger:focus {
+   box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px #dc2626; /* focus:ring-red-500 */
+}
+.btn-danger:disabled {
+  background-color: #fca5a5; /* disabled:bg-red-300 */
+}
+@media (prefers-color-scheme: dark) {
+  .btn-danger {
+    background-color: #ef4444; /* dark:bg-red-500 */
+  }
+  .btn-danger:hover {
+    background-color: #f87171; /* dark:hover:bg-red-400 */
+  }
+  .btn-danger:disabled {
+    background-color: #7f1d1d; /* dark:disabled:bg-red-700 */
+  }
+}
+
+/* UI Message Boxes (from original @apply rules) */
+.ui-message-box { /* Base for all message types */
+  margin-top: 1.5rem; /* mt-6 (for the main one), mt-2 for others */
+  padding: 0.75rem; /* p-3 */
+  border-radius: 0.375rem; /* rounded-md */
+  text-align: center;
+  font-size: 0.875rem; /* text-sm */
+}
+
+.info-box { /* Specific type */
+  margin-top: 0.5rem; /* mt-2 */
+  padding: 0.75rem; /* p-3 */
+  background-color: #f3f4f6; /* bg-gray-100 */
+  border-radius: 0.375rem; /* rounded-md */
+  border: 1px solid #e5e7eb; /* border-gray-200 */
+  color: #374151; /* text-gray-700 */
+}
+@media (prefers-color-scheme: dark) {
+  .info-box {
+    background-color: #374151; /* dark:bg-gray-700 */
+    border-color: #4b5568; /* dark:border-gray-600 */
+    color: #e5e7eb; /* dark:text-gray-200 */
+  }
+}
+
+.error-box { /* Specific type */
+  margin-top: 0.5rem; /* mt-2 */
+  padding: 0.75rem; /* p-3 */
+  background-color: #fee2e2; /* bg-red-100 */
+  color: #b91c1c; /* text-red-700 */
+  border-radius: 0.375rem; /* rounded-md */
+  border: 1px solid #fecaca; /* border-red-200 */
+}
+@media (prefers-color-scheme: dark) {
+  .error-box {
+    background-color: rgba(153, 27, 27, 0.3); /* dark:bg-red-700/30 */
+    color: #fca5a5; /* dark:text-red-300 */
+    border-color: rgba(220, 38, 38, 0.5); /* dark:border-red-500/50 */
+  }
+}
+
+.success-box { /* Specific type */
+  margin-top: 0.5rem; /* mt-2 */
+  padding: 0.75rem; /* p-3 */
+  background-color: #dcfce7; /* bg-green-100 */
+  color: #166534; /* text-green-700 */
+  border-radius: 0.375rem; /* rounded-md */
+  border: 1px solid #bbf7d0; /* border-green-200 */
+}
+@media (prefers-color-scheme: dark) {
+  .success-box {
+    background-color: rgba(22, 101, 52, 0.3); /* dark:bg-green-700/30 */
+    color: #86efac; /* dark:text-green-300 */
+    border-color: rgba(34, 197, 94, 0.5); /* dark:border-green-500/50 */
+  }
+}
+
 </style>

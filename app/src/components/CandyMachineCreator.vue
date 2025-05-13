@@ -1,175 +1,99 @@
 <template>
-  <div class="candy-machine-creator">
-    <h2>Create Your Own Candy Machine</h2>
-    <div class="wallet-button-container">
+  <div class="cm-creator-embedded">
+    <h4 class="cm-creator-title">
+      {{ createdCandyMachineId ? 'Candy Machine Created!' : 'Setup New Candy Machine for this Episode' }}
+    </h4>
+
+    <!-- <div v-if="!isWalletManagedExternally && !wallet.connected.value" class="cm-wallet-button-container">
       <WalletMultiButton />
     </div>
+     <div v-if="!isWalletManagedExternally && wallet.connected.value" class="cm-info-box cm-wallet-info">
+      Wallet: <span class="cm-wallet-address">{{ shortenAddress(wallet.publicKey.value?.toBase58()) }}</span>
+    </div> -->
 
-    <div v-if="!wallet.connected.value" class="alert alert-warning">
-      Please connect your wallet to continue.
-    </div>
-
-    <form @submit.prevent="handleCreateCandyMachine" v-if="wallet.connected.value">
-      <!-- Collection Details -->
-      <fieldset>
-        <legend>1. Collection NFT Details & Metadata</legend>
-        <div>
-          <label for="collectionName">Collection Name (for on-chain NFT & JSON):</label>
-          <input type="text" id="collectionName" v-model="collectionConfig.name" required />
+    <form @submit.prevent="handleCreateCandyMachine" v-if="wallet.connected.value && !createdCandyMachineId" class="cm-form">
+      <fieldset class="cm-fieldset">
+        <legend class="cm-legend">1. Collection Link (Optional)</legend>
+         <!-- <p class="cm-fieldset-description">
+           The Candy Machine will be linked to a new Collection NFT.
+           The Collection NFT's metadata will use details from the current Tale:
+           <br/>Name: "{{ episodeProps.parentTale?.title || 'Episode Collection' }}",
+           Symbol: "{{ episodeProps.parentTale?.title?.substring(0,3).toUpperCase().replace(/[^A-Z0-9]/g, '') || 'ECL' }}"
+        </p> -->
+        <div class="form-group">
+          <label for="cmCollectionName" class="form-label">Collection Name (for on-chain NFT):</label>
+          <input type="text" id="cmCollectionName" v-model="collectionConfig.name" class="form-input" required />
         </div>
-        <div>
-          <label for="collectionSymbol">Collection Symbol (for on-chain NFT & JSON, optional in JSON):</label>
-          <input type="text" id="collectionSymbol" v-model="collectionConfig.symbol" />
+         <div class="form-group">
+          <label for="cmCollectionSymbol" class="form-label">Collection Symbol:</label>
+          <input type="text" id="cmCollectionSymbol" v-model="collectionConfig.symbol" class="form-input" />
         </div>
-        <div>
-          <label for="collectionDescription">Collection Description (for JSON):</label>
-          <textarea id="collectionDescription" v-model="collectionMetadataDetails.description" placeholder="Detailed description of your collection..."></textarea>
-        </div>
-        <div>
-            <label for="collectionImageFile">Collection Image/Logo (for JSON, upload preferred):</label>
-            <input type="file" id="collectionImageFile" @change="handleCollectionImageFileChange" accept="image/*" />
-            <small v-if="collectionMetadataDetails.imagePreviewUrl">Preview: <img :src="collectionMetadataDetails.imagePreviewUrl" alt="collection preview" class="image-preview" /></small>
-            <small v-if="collectionMetadataDetails.imageFile && !collectionMetadataDetails.imagePreviewUrl">File selected: {{ collectionMetadataDetails.imageFile.name }}</small>
-        </div>
-        <div>
-            <label for="collectionImageUrl">Or Collection Image/Logo URL (if not uploading file):</label>
-            <input type="url" id="collectionImageUrl" v-model="collectionMetadataDetails.imageUrl" placeholder="https://example.com/collection-logo.png" :disabled="!!collectionMetadataDetails.imageFile" />
-            <small v-if="collectionMetadataDetails.imageUrl && !collectionMetadataDetails.imageFile">Using URL: {{ collectionMetadataDetails.imageUrl }}</small>
-        </div>
-        <div>
-          <label for="collectionExternalUrl">Collection External URL (e.g., project website, for JSON):</label>
-          <input type="url" id="collectionExternalUrl" v-model="collectionMetadataDetails.external_url" placeholder="https://mycollection.com" />
-        </div>
-        <div>
-          <label for="collectionSellerFee">Collection Seller Fee Basis Points (for on-chain NFT & JSON, e.g., 500 for 5%):</label>
-          <input type="number" id="collectionSellerFee" v-model.number="collectionConfig.sellerFeeBasisPoints" min="0" max="10000" required />
-        </div>
-        <div v-if="collectionConfig.uri">
-            <label>Generated Collection Metadata URI:</label>
-            <input type="text" :value="collectionConfig.uri" readonly disabled/>
-            <small>This URI will be used for the on-chain Collection NFT. It was generated from the details above.</small>
-        </div>
-         <div v-else>
-            <small class="alert alert-info" style="margin-top:10px;">
-                The Collection Metadata URI will be automatically generated and populated here when you submit the form.
-            </small>
+        <div class="form-group">
+          <label for="collectionSellerFee" class="form-label">Collection Seller Fee Basis Points (e.g., 500 for 5%):</label>
+          <input type="number" id="collectionSellerFee" v-model.number="collectionConfig.sellerFeeBasisPoints" class="form-input" min="0" max="10000" required />
         </div>
       </fieldset>
 
-      <!-- Candy Machine Details -->
-      <fieldset>
-        <legend>2. Candy Machine Configuration</legend>
-        <div>
-          <label for="itemsAvailable">Total Items Available:</label>
-          <input type="number" id="itemsAvailable" v-model.number="cmConfig.itemsAvailable" min="1" required />
+      <fieldset class="cm-fieldset">
+        <legend class="cm-legend">2. Candy Machine Settings</legend>
+        <div class="form-group">
+          <label for="cmItemsAvailable" class="form-label">Total Items (typically 1 for a single episode NFT):</label>
+          <input type="number" id="cmItemsAvailable" v-model.number="cmConfig.itemsAvailable" class="form-input" min="1" required />
         </div>
-          <div>
-          <label for="tokenStandard">Token Standard:</label>
-          <select v-model="cmConfig.tokenStandard">
-            <option :value="UmiTokenStandardForSelect.NonFungible">NonFungible (Original)</option>
-            <option :value="UmiTokenStandardForSelect.ProgrammableNonFungible">ProgrammableNonFungible (pNFT)</option>
-          </select>
+        <div class="form-group">
+          <label for="cmNamePrefix" class="form-label">NFT Name Prefix (e.g., "{{ currentEpisodeName }} #"):</label>
+          <input type="text" id="cmNamePrefix" v-model="cmConfig.namePrefix" class="form-input" required />
         </div>
-        <div>
-          <label for="sellerFee">CM Seller Fee Basis Points (inherited by NFTs, e.g., 500 for 5%):</label>
-          <input type="number" id="sellerFee" v-model.number="cmConfig.sellerFeeBasisPoints" min="0" max="10000" required />
+        <div class="form-group">
+          <label for="cmSellerFee" class="form-label">NFT Seller Fee Basis Points:</label>
+          <input type="number" id="cmSellerFee" v-model.number="cmConfig.sellerFeeBasisPoints" class="form-input" min="0" max="10000" required />
         </div>
-        <div>
-          <label for="isMutable">Is Mutable (can settings be changed later?):</label>
-          <input type="checkbox" id="isMutable" v-model="cmConfig.isMutable" />
+         <input type="hidden" v-model="cmConfig.symbol" />
+        <input type="hidden" v-model="cmConfig.creatorsJson" />
+
+      </fieldset>
+
+      <fieldset class="cm-fieldset">
+        <legend class="cm-legend">3. Minting Rules (Candy Guard)</legend>
+        <div class="form-group">
+          <label for="cmSolPaymentAmount" class="form-label">SOL Price per NFT (e.g., 0.1):</label>
+          <input type="number" step="any" id="cmSolPaymentAmount" v-model.number="guardConfig.solPayment.amount" class="form-input" min="0" />
         </div>
-        <div>
-          <label for="symbol">Symbol for minted NFTs (often same as collection):</label>
-          <input type="text" id="symbol" v-model="cmConfig.symbol" />
-          <small>If blank, will use empty string. Max 10 chars.</small>
-        </div>
-          <div>
-          <label for="maxEditionSupply">Max Edition Supply (for pNFT masters, 0 for unique):</label>
-          <input type="number" id="maxEditionSupply" v-model.number="cmConfig.maxEditionSupply" min="0" />
-          <small>Usually 0 for 1/1 NFTs from CM. Used if CM mints master editions.</small>
-        </div>
-          <div>
-            <label for="creators">Creators (JSON Array - Address must be Base58):</label>
-            <textarea id="creators" v-model="cmConfig.creatorsJson" placeholder='[{"address": "YOUR_WALLET_ADDRESS_PLACEHOLDER", "share": 100}]'></textarea>
-            <small>Example: [{"address": "...", "verified": false, "share": 100}]. 'verified' typically false initially.</small>
+        <div class="form-group">
+          <label for="cmSolPaymentDestination" class="form-label">Payment Destination (your wallet):</label>
+          <input type="text" id="cmSolPaymentDestination" v-model="guardConfig.solPayment.destination" class="form-input" readonly />
+           <small class="form-text">Will use your connected wallet.</small>
         </div>
       </fieldset>
 
-      <!-- Candy Guard Details (Simplified) -->
-      <fieldset>
-        <legend>3. Candy Guard (Basic Setup)</legend>
-        <div>
-          <label for="solPaymentAmount">SOL Payment Amount (e.g., 0.1 for 0.1 SOL):</label>
-          <input type="number" step="any" id="solPaymentAmount" v-model.number="guardConfig.solPayment.amount" min="0" />
+      <fieldset class="cm-fieldset">
+        <legend class="cm-legend">4. NFT Metadata for this Episode</legend>
+        <p class="cm-fieldset-description">
+           This metadata will be used for all {{ cmConfig.itemsAvailable }} item(s) in this new Candy Machine.
+           The NFT name will be "{{ cmConfig.namePrefix }}[Number]".
+           The image and description will come from the Episode details you've already provided.
+        </p>
+        <div v-if="nftBaseMetadata.generatedJsonUri" class="form-group">
+            <label class="form-label">Generated NFT Metadata URI:</label>
+            <input type="text" :value="nftBaseMetadata.generatedJsonUri" class="form-input" readonly/>
         </div>
-        <div>
-          <label for="cmNamePrefix">NFT Name Prefix (for on-chain sequence, e.g., "My NFT #"):</label>
-          <input type="text" id="cmNamePrefix" v-model="cmConfig.namePrefix" placeholder="e.g., Cool NFT #" required />
-          <small>A sequential number will be auto-appended by the Candy Machine. Max {{ 32 - String(cmConfig.itemsAvailable).length -1 }} chars for prefix usually.</small>
-        </div>
-          <div>
-          <label for="solPaymentDestination">SOL Payment Destination (Base58 Address):</label>
-          <input type="text" id="solPaymentDestination" v-model="guardConfig.solPayment.destination" />
-            <small>Defaults to your connected wallet if left blank.</small>
-        </div>
-        <div>
-          <label for="startDate">Go Live Date (UTC):</label>
-          <input type="datetime-local" id="startDate" v-model="guardConfig.startDate" />
-        </div>
-          <div>
-          <label for="endDate">End Date (UTC, optional):</label>
-          <input type="datetime-local" id="endDate" v-model="guardConfig.endDate" />
-        </div>
+         <small v-else class="alert alert-info generated-uri-info">NFT Metadata URI will be generated upon CM creation using the Episode's image and description.</small>
       </fieldset>
 
-      <!-- Items to Insert -->
-     <fieldset>
-        <legend>4. Shared NFT Metadata (used for all {{ cmConfig.itemsAvailable }} items)</legend>
-        <div class="item-metadata-entry single-metadata-entry">
-          <!-- Name Prefix input removed from here -->
-          <div>
-            <label for="itemDescription">Description (shared by all NFTs):</label>
-            <textarea id="itemDescription" v-model="nftBaseMetadata.description" placeholder="Detailed description for all NFTs"></textarea>
-          </div>
-          <div>
-            <label for="itemImageFile">Image File (shared by all NFTs, upload preferred):</label>
-            <input type="file" id="itemImageFile" @change="handleImageFileChange" accept="image/*" />
-            <small v-if="nftBaseMetadata.imagePreviewUrl">Preview: <img :src="nftBaseMetadata.imagePreviewUrl" alt="preview" class="image-preview" /></small>
-            <small v-if="nftBaseMetadata.imageFile && !nftBaseMetadata.imagePreviewUrl">File selected: {{ nftBaseMetadata.imageFile.name }}</small>
-          </div>
-          <div>
-            <label for="itemImageUrl">Or Image URL (if not uploading file, shared by all NFTs):</label>
-            <input type="url" id="itemImageUrl" v-model="nftBaseMetadata.imageUrl" placeholder="https://example.com/image.png" :disabled="!!nftBaseMetadata.imageFile" />
-            <small v-if="nftBaseMetadata.imageUrl && !nftBaseMetadata.imageFile">Using URL: {{ nftBaseMetadata.imageUrl }}</small>
-          </div>
-
-          <fieldset class="attributes-fieldset">
-            <legend>Attributes (shared by all NFTs)</legend>
-            <div v-for="(attr, attrIndex) in nftBaseMetadata.attributes" :key="attrIndex" class="attribute-entry">
-              <input type="text" v-model="attr.trait_type" placeholder="Trait Type (e.g., Color)" />
-              <input type="text" v-model="attr.value" placeholder="Value (e.g., Red)" />
-              <button type="button" @click="removeAttribute(attrIndex)" class="remove-attribute-btn">-</button>
-            </div>
-            <button type="button" @click="addAttribute" class="add-attribute-btn">+ Add Attribute</button>
-          </fieldset>
-        </div>
-      </fieldset>
-
-      <button type="submit" :disabled="isLoading || !wallet.connected.value">
-        {{ isLoading ? 'Creating...' : 'Create Candy Machine & Insert Items' }}
+      <button type="submit" :disabled="isLoading || !wallet.connected.value" class="btn btn-success cm-submit-button">
+        {{ isLoading ? 'Creating CM...' : 'Create Candy Machine for Episode' }}
       </button>
     </form>
 
-    <div v-if="isLoading" class="loading-indicator">
-      Processing... please wait and do not close this window. Check your wallet for transaction approvals.
+    <div v-if="isLoading && !createdCandyMachineId" class="loading-indicator cm-loading-indicator">
+      Creating Candy Machine... check wallet for approvals. This may take a moment.
     </div>
-    <div v-if="successMessage" class="alert alert-success">
-      {{ successMessage }}
-      <div v-if="createdCollectionId">Collection ID: {{ createdCollectionId }}</div>
-      <div v-if="createdCandyMachineId">Candy Machine ID: {{ createdCandyMachineId }}</div>
-      <div v-if="transactionSignature">Last TX: <a :href="`https://explorer.solana.com/tx/${transactionSignature}?cluster=devnet`" target="_blank">{{ transactionSignature }}</a></div>
+    <div v-if="createdCandyMachineId" class="alert alert-success cm-success-message">
+      CM Created! ID: <span class="cm-id-display">{{ createdCandyMachineId }}</span>.
+      <br/>Collection ID: <span class="cm-id-display">{{ createdCollectionId }}</span>
+      <br/>This ID will be saved with the episode.
     </div>
-    <div v-if="errorMessage" class="alert alert-danger">
+    <div v-if="errorMessage" class="alert alert-danger cm-error-message">
       Error: {{ errorMessage }}
     </div>
   </div>
@@ -635,127 +559,231 @@ async function handleCreateCandyMachine() {
 </script>
 
 <style scoped>
-.candy-machine-creator {
-  max-width: 800px;
-  margin: 20px auto;
-  padding: 20px;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  font-family: sans-serif;
+.cm-creator-embedded {
+  padding: 1rem; /* p-4 */
+  border: 1px solid #d1d5db; /* border-gray-300 */
+  border-radius: 0.375rem; /* rounded-md */
+  margin-top: 1rem; /* mt-4 */
+  background-color: #f9fafb; /* Lighter background for embedded form */
 }
-.wallet-button-container {
+.dark .cm-creator-embedded {
+  border-color: #4b5568; /* dark:border-gray-600 */
+  background-color: #374151; /* Slightly different dark bg */
+}
+
+.cm-creator-title {
+  font-size: 1.125rem; /* text-lg */
+  font-weight: 600; /* font-semibold */
+  margin-bottom: 0.75rem; /* mb-3 */
+  color: #374151; /* text-gray-700 */
+}
+.dark .cm-creator-title {
+  color: #e5e7eb; /* dark:text-gray-200 */
+}
+
+.cm-wallet-button-container {
+  margin-bottom: 1rem; /* mb-4 */
   display: flex;
-  justify-content: flex-end;
-  margin-bottom: 20px;
+  justify-content: center; /* Center the wallet button if shown */
 }
-fieldset {
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  padding: 15px;
-  margin-bottom: 20px;
+.cm-info-box { /* For connected wallet display */
+  margin-bottom: 1rem; /* mb-4 */
+  padding: 0.5rem;
+  font-size: 0.875rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.25rem;
+  background-color: #e5e7eb;
+  text-align: center;
 }
-legend {
-  font-weight: bold;
-  padding: 0 10px;
+.dark .cm-info-box {
+  background-color: #4b5568;
+  border-color: #6b7280;
+  color: #f3f4f6;
 }
-label {
+.cm-wallet-address {
+  font-family: monospace;
+}
+
+.cm-form {
+  /* No specific form-wide styles, relies on fieldset and form-group */
+}
+
+.cm-fieldset {
+  border: 1px solid #cbd5e1; /* border-gray-300/400 */
+  border-radius: 0.375rem; /* rounded-md */
+  padding: 0.75rem 1rem; /* p-3 p-4 */
+  margin-bottom: 1rem; /* mb-4 */
+}
+.dark .cm-fieldset {
+  border-color: #4a5568; /* dark:border-gray-600 */
+}
+
+.cm-legend {
+  font-weight: 500; /* font-medium */
+  color: #374151; /* text-gray-700 */
+  padding: 0 0.25rem; /* px-1 */
+  font-size: 0.875rem; /* text-sm */
+}
+.dark .cm-legend {
+  color: #d1d5db; /* dark:text-gray-300 */
+}
+
+.cm-fieldset-description {
+  font-size: 0.75rem; /* text-xs */
+  color: #6b7280; /* text-gray-500 */
+  margin-bottom: 0.5rem; /* mb-2 */
+}
+.dark .cm-fieldset-description {
+  color: #9ca3af; /* dark:text-gray-400 */
+}
+
+.form-group {
+  margin-bottom: 0.75rem; /* Consistent spacing for form elements */
+}
+.form-group:last-child {
+  margin-bottom: 0;
+}
+
+.form-label { /* Was form-label-sm */
   display: block;
-  margin-top: 10px;
-  margin-bottom: 5px;
-  font-weight: 500;
+  font-size: 0.75rem; /* text-xs */
+  font-weight: 500; /* font-medium */
+  color: #4b5563; /* text-gray-600 */
+  margin-bottom: 0.125rem; /* mb-0.5 */
 }
-input[type="text"],
-input[type="url"],
-input[type="number"],
-input[type="datetime-local"],
-select,
-textarea {
-  width: calc(100% - 22px);
-  padding: 10px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  box-sizing: border-box;
+.dark .form-label {
+  color: #9ca3af; /* dark:text-gray-400 */
 }
-textarea {
-    min-height: 80px;
-    font-family: monospace;
+
+.form-input { /* Was form-input-sm */
+  font-size: 0.875rem; /* text-sm */
+  width: 100%;
+  padding: 0.5rem 0.75rem; /* px-2 py-1 */
+  border: 1px solid #d1d5db; /* border-gray-300 */
+  border-radius: 0.375rem; /* rounded-md */
+  box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05); /* shadow-sm */
+  background-color: #ffffff;
+  color: #111827;
 }
-input[type="checkbox"] {
-  margin-right: 5px;
+.form-input:focus {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  border-color: #4f46e5; /* focus:border-indigo-500 */
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.5); /* focus:ring-indigo-500 */
 }
-small {
+.dark .form-input {
+  border-color: #6b7280; /* dark:border-gray-500 */
+  background-color: #374151; /* dark:bg-gray-700 */
+  color: #f3f4f6; /* dark:text-gray-100 */
+}
+
+.form-text { /* Was form-text-sm */
   display: block;
-  font-size: 0.85em;
-  color: #555;
-  margin-top: 3px;
+  font-size: 0.75rem; /* text-xs */
+  color: #6b7280; /* text-gray-500 */
+  margin-top: 0.125rem; /* mt-0.5 */
 }
-button[type="submit"] {
-  background-color: #4CAF50;
-  color: white;
-  padding: 12px 20px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1em;
-  transition: background-color 0.3s;
+.dark .form-text {
+  color: #9ca3af; /* dark:text-gray-400 */
 }
-button[type="submit"]:hover {
-  background-color: #45a049;
+
+.generated-uri-info { /* Extends .alert .alert-info */
+  font-size: 0.75rem; /* text-xs */
+  padding: 0.5rem; /* p-2 */
+  margin-top: 0.5rem; /* my-2 */
+  margin-bottom: 0.5rem;
+  display: block;
 }
-button[type="submit"]:disabled {
-  background-color: #ccc;
-  cursor: not-allowed;
+
+.cm-submit-button { /* Extends .btn .btn-success .btn-sm .w-full */
+  width: 100%;
+  margin-top: 1rem; /* mt-4 */
+  padding: 0.375rem 0.75rem; /* btn-sm */
+  font-size: 0.75rem; /* btn-sm */
 }
-.item-entry {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  margin-bottom: 10px;
+
+.loading-indicator.cm-loading-indicator {
+  font-size: 0.75rem; /* text-xs */
+  margin-top: 0.5rem; /* mt-2 */
+  text-align: center;
+  color: #4f46e5;
 }
-.item-entry input {
-  flex-grow: 1;
+.dark .loading-indicator.cm-loading-indicator {
+    color: #a5b4fc;
 }
-.remove-item-btn, .add-item-btn {
-  padding: 8px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-.remove-item-btn {
-  background-color: #f44336;
-  color: white;
-  border: none;
-}
-.add-item-btn {
-  background-color: #2196F3;
-  color: white;
-  border: none;
-  margin-top: 10px;
-}
+
+
 .alert {
-  padding: 15px;
-  margin-bottom: 20px;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  word-break: break-word;
-}
-.alert-warning {
-  color: #856404;
-  background-color: #fff3cd;
-  border-color: #ffeeba;
+  padding: 0.5rem; /* p-2 */
+  border-width: 1px;
+  border-radius: 0.375rem; /* rounded-md */
+  font-size: 0.75rem; /* text-xs */
+  margin-top: 0.5rem; /* mt-2 */
 }
 .alert-success {
-  color: #155724;
-  background-color: #d4edda;
-  border-color: #c3e6cb;
+  background-color: #f0fdf4; /* bg-green-50 */
+  border-color: #a7f3d0; /* border-green-200 */
+  color: #047857; /* text-green-700 */
+}
+.dark .alert-success {
+  background-color: rgba(22, 163, 74, 0.3); /* dark:bg-green-700/30 */
+  border-color: #34d399; /* dark:border-green-600 */
+  color: #a7f3d0; /* dark:text-green-200 */
 }
 .alert-danger {
-  color: #721c24;
-  background-color: #f8d7da;
-  border-color: #f5c6cb;
+  background-color: #fef2f2; /* bg-red-50 */
+  border-color: #fecaca; /* border-red-200 */
+  color: #b91c1c; /* text-red-700 */
 }
-.loading-indicator {
-  text-align: center;
-  padding: 20px;
-  font-style: italic;
+.dark .alert-danger {
+  background-color: rgba(185, 28, 28, 0.3); /* dark:bg-red-700/30 */
+  border-color: #f87171; /* dark:border-red-600 */
+  color: #fecaca; /* dark:text-red-200 */
 }
+.alert-info {
+  background-color: #eff6ff; /* bg-blue-50 */
+  border-color: #bfdbfe; /* border-blue-200 */
+  color: #1d4ed8; /* text-blue-700 */
+}
+.dark .alert-info {
+  background-color: rgba(30, 64, 175, 0.3); /* dark:bg-blue-700/30 */
+  border-color: #60a5fa; /* dark:border-blue-600 */
+  color: #93c5fd; /* dark:text-blue-200 */
+}
+.cm-id-display {
+  font-family: monospace;
+}
+
+/* Reusable Button Styles (if not global) */
+.btn {
+  padding: 0.5rem 1rem;
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #ffffff;
+  cursor: pointer;
+  transition: background-color 0.15s ease-in-out;
+}
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.btn-success {
+  background-color: #16a34a; /* bg-green-600 */
+}
+.btn-success:hover {
+  background-color: #15803d; /* hover:bg-green-700 */
+}
+.dark .btn-success {
+  background-color: #22c55e; /* dark:bg-green-500 */
+}
+.dark .btn-success:hover {
+  background-color: #16a34a; /* dark:hover:bg-green-400 (using darker shade for hover) */
+}
+.dark .btn-success:disabled {
+    background-color: #166534; /* dark:disabled:bg-green-700 */
+}
+
 </style>
