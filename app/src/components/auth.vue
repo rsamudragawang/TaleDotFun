@@ -3,19 +3,30 @@
     <h1 class="auth-title">User Authentication</h1>
 
     <div class="auth-section wallet-section">
-      <h2 class="section-title">Wallet Connection</h2>
+      <h2 class="section-title">1. Wallet Connection</h2>
       <div class="wallet-button-wrapper">
         <WalletMultiButton />
       </div>
       <div v-if="wallet.connected.value && wallet.publicKey.value" class="info-box connected-wallet-info">
         Connected: <span class="wallet-address">{{ shortenAddress(wallet.publicKey.value.toBase58()) }}</span>
       </div>
+      <div v-else class="info-box">
+        Please connect your wallet to proceed.
+      </div>
     </div>
 
-    <div v-if="wallet.connected.value && !isAuthenticated && showRegistrationForm" class="auth-section registration-section">
-      <h2 class="section-title">Complete Your Profile</h2>
-      <p class="registration-prompt">Welcome! Please provide a display name to finish setting up your account.</p>
-      <form @submit.prevent="handleCompleteRegistration" class="auth-form">
+    <div v-if="wallet.connected.value && !isAuthenticated && !showRegistrationForm && !pendingSignatureVerification" class="auth-section sign-message-section">
+      <h2 class="section-title">2. Verify Ownership</h2>
+      <button @click="handleSignMessageAndVerify" :disabled="isLoadingAuth" class="btn btn-primary action-button">
+        {{ isLoadingAuth ? 'Verifying...' : 'Login / Register with Wallet' }}
+      </button>
+      <p class="form-text info-text">You'll be asked to sign a message to verify wallet ownership.</p>
+    </div>
+
+    <div v-if="showRegistrationForm" class="auth-section registration-section">
+      <h2 class="section-title">3. Complete Your Profile</h2>
+      <p class="registration-prompt">Welcome! Your wallet is verified. Please provide a display name to finish setting up your account.</p>
+      <form @submit.prevent="handleCompleteRegistrationWithSignature" class="auth-form">
         <div>
           <label for="nameInput" class="form-label">Your Name:</label>
           <input type="text" id="nameInput" v-model="name" class="form-input-auth" placeholder="Enter your display name" required>
@@ -28,8 +39,8 @@
             <option value="customer">Customer</option>
           </select>
         </div>
-        <button type="submit" :disabled="isLoadingAuth" class="btn btn-primary form-submit-button">
-          {{ isLoadingAuth ? 'Registering...' : 'Register and Login' }}
+        <button type="submit" :disabled="isLoadingAuth" class="btn btn-success form-submit-button">
+          {{ isLoadingAuth ? 'Completing Registration...' : 'Complete Registration' }}
         </button>
       </form>
     </div>
@@ -47,8 +58,8 @@
       <button @click="performLogout" class="btn btn-danger action-button logout-button">Logout from App</button>
     </div>
 
-    <div v-if="wallet.connected.value && !isAuthenticated && !showRegistrationForm && isLoadingAuth" class="auth-section loading-message">
-        Verifying account status...
+    <div v-if="pendingSignatureVerification" class="auth-section loading-message info-box">
+        Verifying signature and account status... Please wait.
     </div>
 
     <div v-if="uiMessage.text"
@@ -64,6 +75,7 @@ import { ref, computed, watch, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useWallet, WalletMultiButton } from 'solana-wallets-vue';
 import axios from 'axios';
+import { Buffer } from 'buffer'; // Needed for TextEncoder if running in environment where it's not global
 
 const router = useRouter();
 const route = useRoute();
@@ -76,13 +88,17 @@ const JWT_TOKEN_KEY = 'readium_fun_jwt_token';
 // Auth State
 const token = ref(localStorage.getItem(JWT_TOKEN_KEY));
 const currentUser = ref(null);
-const isLoadingAuth = ref(false);
+const isLoadingAuth = ref(false); // General loading state for auth operations
 const showRegistrationForm = ref(false);
+const pendingSignatureVerification = ref(false); // New state for when verifying signature
+
+// Store message and signature if profile completion is needed
+const signedAuthData = ref({ message: '', signature: null, walletAddress: '' });
 
 const isAuthenticated = computed(() => !!token.value && !!currentUser.value);
 
 // Form Inputs for registration
-const name = ref('testingUser');
+const name = ref('');
 const userType = ref('user');
 
 // UI Message
@@ -100,56 +116,128 @@ const shortenAddress = (address, chars = 6) => {
   return `${address.slice(0, chars)}...${address.slice(-chars)}`;
 };
 
-// Auth API Client
 const authApiClient = axios.create({
   baseURL: AUTH_API_BASE_URL,
   headers: { 'Content-Type': 'application/json' },
+});
+authApiClient.interceptors.request.use(config => {
+  const currentToken = localStorage.getItem(JWT_TOKEN_KEY); // Get fresh token
+  if (currentToken) {
+    config.headers.Authorization = `Bearer ${currentToken}`;
+  }
+  return config;
 });
 authApiClient.interceptors.response.use(
   (response) => response.data,
   (error) => Promise.reject(error.response?.data || { message: error.message || 'Network error (Auth API)' })
 );
 
-async function attemptAutoLoginApi(walletAddr) {
-  return authApiClient.post('/auth/simplified-wallet-login', { walletAddress: walletAddr });
+// New API call functions
+async function verifySignatureApi(payload) {
+  // payload: { walletAddress, message, signature (base64) }
+  return authApiClient.post('/auth/verify-signature', payload);
 }
-async function completeRegistrationApi(credentials) {
-  return authApiClient.post('/auth/simplified-wallet-login', credentials);
+async function completeProfileWithSignatureApi(payload) {
+  // payload: { walletAddress, name, type, message, signature (base64) }
+  return authApiClient.post('/auth/complete-profile-with-signature', payload);
 }
-async function fetchUserProfileApi(authToken) {
-  return authApiClient.get('/auth/me', {
-    headers: { 'Authorization': `Bearer ${authToken}` },
-  });
+async function fetchUserProfileApi() { // Removed authToken param, uses interceptor
+  return authApiClient.get('/auth/me');
 }
 
-async function handleCompleteRegistration() {
-  if (!wallet.publicKey.value) {
-    showUiMessage('Wallet not connected.', 'error'); return;
+async function handleSignMessageAndVerify() {
+  if (!wallet.connected.value || !wallet.publicKey.value || !wallet.signMessage.value) {
+    showUiMessage('Wallet not connected or does not support message signing.', 'error');
+    return;
   }
+
+  isLoadingAuth.value = true;
+  pendingSignatureVerification.value = true;
+  showUiMessage('Please sign the message in your wallet to continue...', 'info', 0);
+
+  const messageToSign = `Welcome to Readium Fun! Please sign this message to authenticate your wallet. Timestamp: ${Date.now()}`;
+  const messageBytes = new TextEncoder().encode(messageToSign);
+
+  try {
+    const signatureBytes = await wallet.signMessage.value(messageBytes);
+    const signatureBase64 = Buffer.from(signatureBytes).toString('base64'); // Send as base64
+    const walletAddress = wallet.publicKey.value.toBase58();
+
+    const verificationResult = await verifySignatureApi({
+      walletAddress,
+      message: messageToSign,
+      signature: signatureBase64,
+    });
+
+    if (verificationResult.success) {
+      if (verificationResult.needsProfile) {
+        showUiMessage('Wallet verified! Please complete your profile.', 'success');
+        signedAuthData.value = { message: messageToSign, signature: signatureBase64, walletAddress };
+        showRegistrationForm.value = true;
+      } else if (verificationResult.token && verificationResult.user) {
+        localStorage.setItem(JWT_TOKEN_KEY, verificationResult.token);
+        token.value = verificationResult.token;
+        currentUser.value = verificationResult.user;
+        showRegistrationForm.value = false; // Ensure it's hidden
+        showUiMessage('Successfully logged in!', 'success');
+        // navigateToNext(); // Or handle navigation as needed
+      } else {
+        throw new Error("Invalid response from server after signature verification.");
+      }
+    } else {
+      throw new Error(verificationResult.message || 'Signature verification failed.');
+    }
+  } catch (error) {
+    console.error("Error during sign message and verify:", error);
+    showUiMessage(error.message || 'An error occurred during wallet verification.', 'error');
+    performLogout(false); // Clear any partial auth state
+  } finally {
+    isLoadingAuth.value = false;
+    pendingSignatureVerification.value = false;
+    if (uiMessage.value.text.startsWith('Please sign')) showUiMessage('', 'info');
+  }
+}
+
+async function handleCompleteRegistrationWithSignature() {
   if (!name.value.trim()) {
     showUiMessage('Please enter your name.', 'error'); return;
   }
+  if (!signedAuthData.value.signature || !signedAuthData.value.walletAddress) {
+    showUiMessage('Verification data missing. Please try the sign-in process again.', 'error');
+    showRegistrationForm.value = false; // Reset flow
+    return;
+  }
+
   isLoadingAuth.value = true;
-  showUiMessage('Registering and logging in...', 'info', null);
+  showUiMessage('Completing registration...', 'info', 0);
   try {
-    const result = await completeRegistrationApi({
-      walletAddress: wallet.publicKey.value.toBase58(),
+    const result = await completeProfileWithSignatureApi({
+      walletAddress: signedAuthData.value.walletAddress,
       name: name.value.trim(),
       type: userType.value,
+      message: signedAuthData.value.message,
+      signature: signedAuthData.value.signature,
     });
-    if (result.success && result.token) {
+
+    if (result.success && result.token && result.user) {
       localStorage.setItem(JWT_TOKEN_KEY, result.token);
       token.value = result.token;
-      currentUser.value = result.data;
+      currentUser.value = result.user;
       showRegistrationForm.value = false;
+      signedAuthData.value = { message: '', signature: null, walletAddress: '' }; // Clear stored data
       showUiMessage('Successfully registered and logged in!', 'success');
-      name.value = ''; // Clear form
-      // REMOVED: navigateToNext(); 
-    } else { throw new Error(result.message || 'Registration failed.'); }
+      name.value = '';
+      // navigateToNext();
+    } else {
+      throw new Error(result.message || 'Profile completion failed.');
+    }
   } catch (error) {
-    showUiMessage(error.message || 'An unknown error occurred during registration.', 'error');
-    performLogout(false);
-  } finally { isLoadingAuth.value = false; }
+    showUiMessage(error.message || 'An unknown error occurred during registration completion.', 'error');
+    // Don't necessarily logout here, user might want to retry form if it was a validation error from backend
+  } finally {
+    isLoadingAuth.value = false;
+    if (uiMessage.value.text.startsWith('Completing registration')) showUiMessage('', 'info');
+  }
 }
 
 function performLogout(showMsg = true) {
@@ -157,63 +245,43 @@ function performLogout(showMsg = true) {
   token.value = null;
   currentUser.value = null;
   showRegistrationForm.value = false;
+  signedAuthData.value = { message: '', signature: null, walletAddress: '' };
+  pendingSignatureVerification.value = false;
   if (showMsg) { showUiMessage('You have been logged out.', 'info'); }
 }
 
-async function checkAuthStateForCurrentWallet() {
-  if (!wallet.publicKey.value) {
-    if(isAuthenticated.value) performLogout(false);
-    showRegistrationForm.value = false;
-    return;
-  }
-
-  isLoadingAuth.value = true;
-  showRegistrationForm.value = false;
-  showUiMessage('Verifying account status...', 'info', null);
-  const currentWalletAddr = wallet.publicKey.value.toBase58();
+async function checkExistingSession() {
   const storedToken = localStorage.getItem(JWT_TOKEN_KEY);
-
-  if (storedToken) {
+  if (storedToken && wallet.publicKey.value) { // Check if wallet is also available
+    isLoadingAuth.value = true;
+    showUiMessage('Checking existing session...', 'info', 0);
     try {
-      const profileResult = await fetchUserProfileApi(storedToken);
-      if (profileResult.success && profileResult.data.walletAddress === currentWalletAddr) {
-        token.value = storedToken;
+      const profileResult = await fetchUserProfileApi(); // Token is sent by interceptor
+      // Verify token is for the currently connected wallet
+      if (profileResult.success && profileResult.data.walletAddress === wallet.publicKey.value.toBase58()) {
+        token.value = storedToken; // Re-affirm token
         currentUser.value = profileResult.data;
-        isLoadingAuth.value = false;
         showUiMessage('Session restored.', 'success');
-        // REMOVED: navigateToNext(); 
-        return;
       } else {
+        // Token is invalid or for a different wallet
         performLogout(false);
+        if(wallet.connected.value) showUiMessage('Previous session invalid for current wallet. Please log in.', 'info');
       }
-    } catch (e) {
+    } catch (error) {
+      // API call failed, token likely invalid or expired
       performLogout(false);
+      if(wallet.connected.value) showUiMessage('Session expired or invalid. Please log in.', 'info');
+    } finally {
+      isLoadingAuth.value = false;
+      if (uiMessage.value.text.startsWith('Checking existing session')) showUiMessage('', 'info');
     }
-  }
-
-  try {
-    const autoLoginResult = await attemptAutoLoginApi(currentWalletAddr);
-    if (autoLoginResult.success && autoLoginResult.token) {
-      localStorage.setItem(JWT_TOKEN_KEY, autoLoginResult.token);
-      token.value = autoLoginResult.token;
-      currentUser.value = autoLoginResult.data;
-      showUiMessage('Welcome back!', 'success');
-      // REMOVED: navigateToNext(); 
-    } else if (!autoLoginResult.success) {
-      showUiMessage('New wallet detected. Please complete your profile.', 'info');
-      showRegistrationForm.value = true;
-    } else {
-      throw new Error(autoLoginResult.message || 'Auto-login check failed.');
-    }
-  } catch (error) {
-    showUiMessage(error.message || 'Could not verify authentication status.', 'error');
+  } else {
+    // No token or no wallet public key, ensure logged out state
     performLogout(false);
-  } finally {
-    isLoadingAuth.value = false;
   }
 }
 
-// This function is still used by the "Proceed to Create Candy Machine" button
+
 function navigateToNext() {
     if (route.query.redirect && typeof route.query.redirect === 'string') {
         router.push(route.query.redirect);
@@ -221,10 +289,9 @@ function navigateToNext() {
         router.push({ name: 'CreateCandyMachine' }); // Default navigation
     }
 }
-
 function goToCreateCandyMachine() {
     if (isAuthenticated.value) {
-        navigateToNext(); // Use the existing navigation logic
+        navigateToNext();
     } else {
         showUiMessage('Authentication error. Please try logging in again.', 'error');
     }
@@ -234,29 +301,27 @@ watch(() => wallet.publicKey.value, (newPublicKey, oldPublicKey) => {
   const newAddress = newPublicKey?.toBase58();
   const oldAddress = oldPublicKey?.toBase58();
 
-  if (newAddress && newAddress !== oldAddress) {
+  if (newAddress && newAddress !== oldAddress) { // Wallet connected or changed
     console.log('Auth.vue: Wallet connected/changed to', newAddress);
-    if (oldAddress && isAuthenticated.value) {
-      showUiMessage(`Wallet account switched. Logging out previous session.`, 'info');
-      performLogout(false);
-    }
-    checkAuthStateForCurrentWallet();
-  } else if (!newAddress && oldAddress) {
+    performLogout(false); // Always logout previous session on wallet change before new auth attempt
+    checkExistingSession(); // Check if there's a valid token for the new wallet
+  } else if (!newAddress && oldAddress) { // Wallet disconnected
     console.log('Auth.vue: Wallet disconnected from', oldAddress);
-    showUiMessage('Wallet disconnected.', 'info');
-    performLogout(false);
-    showRegistrationForm.value = false;
+    performLogout(true); // Logout with message
+  } else if (newAddress && !isAuthenticated.value && !showRegistrationForm.value) {
+    // Wallet is connected, but user is not authenticated and not in registration.
+    // This case is handled by the UI showing the "Login / Register with Wallet" button.
+    // We might still check for an existing session if one wasn't checked on mount.
+    checkExistingSession();
   }
-}, { immediate: false });
-
+}, { immediate: false }); // Let onMounted handle initial state
 
 onMounted(() => {
-  if (wallet.connected.value && wallet.publicKey.value) {
-    console.log('Auth.vue: Wallet already connected on mount. Checking auth state for', wallet.publicKey.value.toBase58());
-    checkAuthStateForCurrentWallet();
-  } else {
-    console.log('Auth.vue: No wallet connected on mount. Waiting for user action or auto-connect.');
+  // Buffer might not be globally available in all browser contexts for TextEncoder
+  if (typeof window !== 'undefined' && !window.Buffer) {
+    window.Buffer = Buffer;
   }
+  checkExistingSession(); // Check session on component mount
 });
 
 </script>
@@ -277,10 +342,8 @@ onMounted(() => {
     padding: 2rem; /* md:p-8 */
   }
 }
-@media (prefers-color-scheme: dark) {
-  .auth-container {
-    background-color: #1f2937; /* dark:bg-gray-800 */
-  }
+.dark .auth-container {
+  background-color: #1f2937; /* dark:bg-gray-800 */
 }
 
 /* Titles */
@@ -292,10 +355,8 @@ onMounted(() => {
   color: #1f2937; /* text-gray-800 */
   margin-bottom: 2rem; /* mb-8 */
 }
-@media (prefers-color-scheme: dark) {
-  .auth-title {
-    color: #ffffff; /* dark:text-white */
-  }
+.dark .auth-title {
+  color: #ffffff; /* dark:text-white */
 }
 
 .section-title {
@@ -305,10 +366,8 @@ onMounted(() => {
   color: #374151; /* text-gray-700 */
   margin-bottom: 0.75rem; /* mb-3 */
 }
-@media (prefers-color-scheme: dark) {
-  .section-title {
-    color: #e5e7eb; /* dark:text-gray-200 */
-  }
+.dark .section-title {
+  color: #e5e7eb; /* dark:text-gray-200 */
 }
 
 /* Sections */
@@ -318,12 +377,10 @@ onMounted(() => {
   border: 1px solid #e5e7eb; /* border-gray-200 */
   border-radius: 0.375rem; /* rounded-md */
 }
-@media (prefers-color-scheme: dark) {
-  .auth-section {
-    border-color: #374151; /* dark:border-gray-700 */
-  }
+.dark .auth-section {
+  border-color: #374151; /* dark:border-gray-700 */
 }
-.welcome-section, .loading-message {
+.sign-message-section, .welcome-section, .loading-message {
   text-align: center;
 }
 
@@ -349,10 +406,8 @@ onMounted(() => {
   color: #4b5563; /* text-gray-600 */
   margin-bottom: 0.75rem; /* mb-3 */
 }
-@media (prefers-color-scheme: dark) {
-  .registration-prompt {
-    color: #9ca3af; /* dark:text-gray-400 */
-  }
+.dark .registration-prompt {
+  color: #9ca3af; /* dark:text-gray-400 */
 }
 .auth-form > div:not(:last-child) { /* Replicates space-y-4 */
     margin-bottom: 1rem;
@@ -381,7 +436,7 @@ onMounted(() => {
 }
 
 
-/* Form Elements (from original @apply rules) */
+/* Form Elements */
 .form-label {
   display: block;
   font-size: 0.875rem; /* text-sm */
@@ -390,10 +445,8 @@ onMounted(() => {
   color: #374151; /* text-gray-700 */
   margin-bottom: 0.25rem; /* mb-1 */
 }
-@media (prefers-color-scheme: dark) {
-  .form-label {
-    color: #d1d5db; /* dark:text-gray-300 */
-  }
+.dark .form-label {
+  color: #d1d5db; /* dark:text-gray-300 */
 }
 
 .form-input-auth {
@@ -415,15 +468,22 @@ onMounted(() => {
   border-color: #6366f1; /* focus:border-indigo-500 */
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.5); /* focus:ring-indigo-500 */
 }
-@media (prefers-color-scheme: dark) {
-  .form-input-auth {
-    border-color: #4b5568; /* dark:border-gray-600 */
-    background-color: #374151; /* dark:bg-gray-700 */
-    color: #f3f4f6; /* dark:text-gray-100 */
-  }
+.dark .form-input-auth {
+  border-color: #4b5568; /* dark:border-gray-600 */
+  background-color: #374151; /* dark:bg-gray-700 */
+  color: #f3f4f6; /* dark:text-gray-100 */
+}
+.form-text.info-text { /* For small informational text below buttons etc. */
+    font-size: 0.75rem; /* text-xs */
+    color: #6b7280; /* text-gray-500 */
+    margin-top: 0.5rem; /* mt-2 */
+}
+.dark .form-text.info-text {
+    color: #9ca3af; /* dark:text-gray-400 */
 }
 
-/* Buttons (from original @apply rules) */
+
+/* Buttons */
 .btn {
   padding: 0.5rem 1rem; /* px-4 py-2 */
   border: 1px solid transparent;
@@ -442,7 +502,7 @@ onMounted(() => {
 }
 .btn:disabled {
   cursor: not-allowed;
-  /* opacity is handled by specific button types */
+  opacity: 0.6; /* General disabled opacity */
 }
 
 .btn-primary {
@@ -451,23 +511,33 @@ onMounted(() => {
 .btn-primary:hover {
   background-color: #4338ca; /* hover:bg-indigo-700 */
 }
-.btn-primary:focus { /* Specific focus ring color */
+.btn-primary:focus {
    box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px #4f46e5; /* focus:ring-indigo-500 */
 }
-.btn-primary:disabled {
-  background-color: #a5b4fc; /* disabled:bg-indigo-300 */
+/* .btn-primary:disabled already handled by .btn:disabled and specific bg below if needed */
+.dark .btn-primary {
+  background-color: #6366f1; /* dark:bg-indigo-500 */
 }
-@media (prefers-color-scheme: dark) {
-  .btn-primary {
-    background-color: #6366f1; /* dark:bg-indigo-500 */
-  }
-  .btn-primary:hover {
-    background-color: #818cf8; /* dark:hover:bg-indigo-400 */
-  }
-   .btn-primary:disabled {
-    background-color: #3730a3; /* dark:disabled:bg-indigo-700 */
-  }
+.dark .btn-primary:hover {
+  background-color: #818cf8; /* dark:hover:bg-indigo-400 */
 }
+
+.btn-success {
+  background-color: #16a34a; /* bg-green-600 */
+}
+.btn-success:hover {
+  background-color: #15803d; /* hover:bg-green-700 */
+}
+.btn-success:focus {
+   box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px #16a34a; /* focus:ring-green-500 */
+}
+.dark .btn-success {
+  background-color: #22c55e; /* dark:bg-green-500 */
+}
+.dark .btn-success:hover {
+  background-color: #16a34a;
+}
+
 
 .btn-danger {
   background-color: #dc2626; /* bg-red-600 */
@@ -478,76 +548,63 @@ onMounted(() => {
 .btn-danger:focus {
    box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px #dc2626; /* focus:ring-red-500 */
 }
-.btn-danger:disabled {
-  background-color: #fca5a5; /* disabled:bg-red-300 */
+.dark .btn-danger {
+  background-color: #ef4444; /* dark:bg-red-500 */
 }
-@media (prefers-color-scheme: dark) {
-  .btn-danger {
-    background-color: #ef4444; /* dark:bg-red-500 */
-  }
-  .btn-danger:hover {
-    background-color: #f87171; /* dark:hover:bg-red-400 */
-  }
-  .btn-danger:disabled {
-    background-color: #7f1d1d; /* dark:disabled:bg-red-700 */
-  }
+.dark .btn-danger:hover {
+  background-color: #f87171; /* dark:hover:bg-red-400 */
 }
 
-/* UI Message Boxes (from original @apply rules) */
-.ui-message-box { /* Base for all message types */
-  margin-top: 1.5rem; /* mt-6 (for the main one), mt-2 for others */
-  padding: 0.75rem; /* p-3 */
-  border-radius: 0.375rem; /* rounded-md */
+
+/* UI Message Boxes */
+.ui-message-box {
+  margin-top: 1.5rem;
+  padding: 0.75rem;
+  border-radius: 0.375rem;
   text-align: center;
-  font-size: 0.875rem; /* text-sm */
+  font-size: 0.875rem;
 }
 
-.info-box { /* Specific type */
-  margin-top: 0.5rem; /* mt-2 */
-  padding: 0.75rem; /* p-3 */
+.info-box {
+  margin-top: 0.5rem;
+  padding: 0.75rem;
   background-color: #f3f4f6; /* bg-gray-100 */
-  border-radius: 0.375rem; /* rounded-md */
+  border-radius: 0.375rem;
   border: 1px solid #e5e7eb; /* border-gray-200 */
   color: #374151; /* text-gray-700 */
 }
-@media (prefers-color-scheme: dark) {
-  .info-box {
-    background-color: #374151; /* dark:bg-gray-700 */
-    border-color: #4b5568; /* dark:border-gray-600 */
-    color: #e5e7eb; /* dark:text-gray-200 */
-  }
+.dark .info-box {
+  background-color: #374151; /* dark:bg-gray-700 */
+  border-color: #4b5568; /* dark:border-gray-600 */
+  color: #e5e7eb; /* dark:text-gray-200 */
 }
 
-.error-box { /* Specific type */
-  margin-top: 0.5rem; /* mt-2 */
-  padding: 0.75rem; /* p-3 */
+.error-box {
+  margin-top: 0.5rem;
+  padding: 0.75rem;
   background-color: #fee2e2; /* bg-red-100 */
   color: #b91c1c; /* text-red-700 */
-  border-radius: 0.375rem; /* rounded-md */
+  border-radius: 0.375rem;
   border: 1px solid #fecaca; /* border-red-200 */
 }
-@media (prefers-color-scheme: dark) {
-  .error-box {
-    background-color: rgba(153, 27, 27, 0.3); /* dark:bg-red-700/30 */
-    color: #fca5a5; /* dark:text-red-300 */
-    border-color: rgba(220, 38, 38, 0.5); /* dark:border-red-500/50 */
-  }
+.dark .error-box {
+  background-color: rgba(153, 27, 27, 0.3); /* dark:bg-red-700/30 */
+  color: #fca5a5; /* dark:text-red-300 */
+  border-color: rgba(220, 38, 38, 0.5); /* dark:border-red-500/50 */
 }
 
-.success-box { /* Specific type */
-  margin-top: 0.5rem; /* mt-2 */
-  padding: 0.75rem; /* p-3 */
+.success-box {
+  margin-top: 0.5rem;
+  padding: 0.75rem;
   background-color: #dcfce7; /* bg-green-100 */
   color: #166534; /* text-green-700 */
-  border-radius: 0.375rem; /* rounded-md */
+  border-radius: 0.375rem;
   border: 1px solid #bbf7d0; /* border-green-200 */
 }
-@media (prefers-color-scheme: dark) {
-  .success-box {
-    background-color: rgba(22, 101, 52, 0.3); /* dark:bg-green-700/30 */
-    color: #86efac; /* dark:text-green-300 */
-    border-color: rgba(34, 197, 94, 0.5); /* dark:border-green-500/50 */
-  }
+.dark .success-box {
+  background-color: rgba(22, 101, 52, 0.3); /* dark:bg-green-700/30 */
+  color: #86efac; /* dark:text-green-300 */
+  border-color: rgba(34, 197, 94, 0.5); /* dark:border-green-500/50 */
 }
 
 </style>
