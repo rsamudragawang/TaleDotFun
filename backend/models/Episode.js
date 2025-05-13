@@ -2,63 +2,81 @@
 const mongoose = require('mongoose');
 
 const EpisodeSchema = new mongoose.Schema({
-  episodeName: {
-    type: String,
-    required: [true, 'Please add an episode name'],
-    trim: true,
-    maxlength: [200, 'Episode name cannot be more than 200 characters'],
-  },
-  tale: { // Reference to the parent Tale
+  // --- Link to Parent Tale (MongoDB Document) ---
+  taleMongoId: { // MongoDB _id of the parent Tale document
     type: mongoose.Schema.ObjectId,
-    ref: 'Tale', // Your Tale model name
+    ref: 'Tale',
     required: true,
+    index: true,
   },
-  author: { // Denormalized: User ID of the creator (same as Tale's author)
-    type: mongoose.Schema.ObjectId,
-    ref: 'User', // Your User model name
-    required: true,
-  },
-  authorWalletAddress: { // Denormalized for convenience
-    type: String,
-    required: true,
-    trim: true,
-  },
-  content: { // Optional: If episodes have textual content beyond images
-    type: String,
-    default: '',
-  },
-  images: { // Array of image URLs (e.g., from Pinata)
+
+  // --- Backend-Managed Off-Chain Data ---
+  images: { // Array of image CIDs/URLs - MANAGED BY BACKEND
     type: [String],
     default: [],
-    validate: [arrayLimit, '{PATH} exceeds the limit of 10 images per episode']
+    validate: [
+        (val) => val.length <= 10,
+        'Images array exceeds the limit of 10 images per episode'
+    ]
   },
-  isNft: {
-    type: Boolean,
-    default: false,
+
+  // --- On-Chain Identifiers (Essential for linking and fetching on-chain data) ---
+  onChainEpisodeIdSeed: { // The string seed (e.g., truncated UUID) used for on-chain PDA derivation
+    type: String,
+    required: [true, "On-chain episode ID seed is required"],
+    trim: true,
+    // This seed + parentTaleOnChainPda should be unique for linking purposes (see compound index)
   },
-  candyMachineId: { // Optional, relevant if isNft is true
+  parentTaleOnChainPda: { // The public key (as string) of the on-chain Tale account
+    type: String,
+    required: [true, "Parent tale's on-chain PDA is required"],
+    trim: true,
+  },
+  episodeOnChainPda: { // The public key (as string) of this episode's on-chain account.
+                        // This is the primary key for linking this backend record to the on-chain episode.
+    type: String,
+    required: [true, "Episode's on-chain PDA is required"],
+    trim: true,
+    unique: true, // Each on-chain episode should have only one corresponding backend record.
+    index: true,
+  },
+
+  // --- Denormalized Author Information (for backend convenience/auth checks) ---
+  authorMongoId: { // MongoDB _id of the author (User document)
+    type: mongoose.Schema.ObjectId,
+    ref: 'User',
+    required: true,
+  },
+  authorWalletAddress: { // Wallet address of the author
+    type: String,
+    required: true,
+    trim: true,
+    index: true,
+  },
+
+  // --- Optional Snapshot/Mirror Fields (for backend querying/display if needed) ---
+  // These fields would be populated by the client after fetching from on-chain
+  // and sent during the sync/update operation.
+  episodeNameSnapshot: {
     type: String,
     trim: true,
-    default: '',
   },
-  order: { // Optional: For sequencing episodes within a tale
+  orderSnapshot: {
     type: Number,
-    default: 0,
   },
-  status: { // Optional: Status of the episode itself
-    type: String,
-    enum: ['draft', 'published'],
-    default: 'draft',
+  statusSnapshot: { // 0: Draft, 1: Published, 2: Archived
+    type: Number,
+  },
+  isNftSnapshot: {
+      type: Boolean
   }
+  // contentIpfsCidSnapshot: String, // Example if you decide to snapshot
+  // candyMachineIdSnapshot: String, // Example if you decide to snapshot
+
 }, { timestamps: true });
 
-function arrayLimit(val) {
-  return val.length <= 10; // Example limit: 10 images per episode
-}
-
-// Indexing
-EpisodeSchema.index({ tale: 1, order: 1 }); // For fetching episodes of a tale in order
-EpisodeSchema.index({ author: 1 });
-EpisodeSchema.index({ candyMachineId: 1 }, { sparse: true }); // Sparse index for optional field
+// Compound index to quickly find a backend episode record using its on-chain identifiers
+// This ensures that for a given parent tale, each episode seed is unique.
+EpisodeSchema.index({ parentTaleOnChainPda: 1, onChainEpisodeIdSeed: 1 }, { unique: true });
 
 module.exports = mongoose.model('Episode', EpisodeSchema);

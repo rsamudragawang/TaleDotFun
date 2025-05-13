@@ -2,81 +2,172 @@
 const Episode = require('../models/Episode');
 const Tale = require('../models/Tale'); // To verify parent tale and ownership
 
-// @desc    Create a new episode for a specific tale
-// @route   POST /api/tales/:taleId/episodes
+// @desc    Create or Update a backend link for an on-chain episode.
+//          Stores images and on-chain identifiers.
+//          Client calls this AFTER successfully creating/updating the episode on-chain.
+// @route   POST /api/episodes/sync-onchain-data
 // @access  Private (Creator who owns the Tale)
-exports.createEpisode = async (req, res, next) => {
+exports.syncOnChainEpisodeWithBackend = async (req, res, next) => {
   try {
-    const taleId = req.params.taleId;
-    const tale = await Tale.findById(taleId);
+    const {
+        // parentTaleMongoId, // Client will now send parentTaleOnChainPda to find parentTaleDoc
+        images,
+        // On-chain identifiers provided by the client:
+        onChainEpisodeIdSeed,   // The seed used to create the episode PDA
+        parentTaleOnChainPda, // On-chain PDA of the parent Tale - THIS IS NOW THE KEY IDENTIFIER FOR PARENT
+        episodeOnChainPda,    // On-chain PDA of the episode itself
+        // Optional snapshot data from on-chain, sent by client:
+        episodeNameSnapshot,
+        orderSnapshot,
+        statusSnapshot,
+        isNftSnapshot,
+    } = req.body;
 
-    if (!tale) {
-      return res.status(404).json({ success: false, message: `Tale not found with id ${taleId}` });
+    // Validate required on-chain identifiers
+    if (!onChainEpisodeIdSeed || !parentTaleOnChainPda || !episodeOnChainPda) {
+      return res.status(400).json({ success: false, message: 'Missing required on-chain identifiers for syncing episode (onChainEpisodeIdSeed, parentTaleOnChainPda, episodeOnChainPda).' });
     }
 
-    // Authorization: Only the author of the tale (who must be a 'creator') can add episodes
-    if (tale.author.toString() !== req.user.id || req.user.type !== 'creator') {
-      return res.status(403).json({ success: false, message: 'User not authorized to add episodes to this tale' });
+    // Find the parent Tale document in MongoDB using its onChainPda
+    // This assumes your Tale model has an 'onChainPda' field that is indexed.
+    const parentTaleDoc = await Tale.findOne({ onChainPda: parentTaleOnChainPda });
+    if (!parentTaleDoc) {
+      return res.status(404).json({ success: false, message: `Parent Tale with on-chain PDA ${parentTaleOnChainPda} not found in backend. Ensure the tale is synced first.` });
     }
 
-    const { episodeName, content, images, isNft, candyMachineId, order, status } = req.body;
-
-    if (!episodeName) {
-        return res.status(400).json({ success: false, message: 'Episode name is required.' });
+    // Authorization: Ensure the user performing this action is the author of the parent tale
+    if (parentTaleDoc.author.toString() !== req.user.id || req.user.type !== 'creator') {
+      return res.status(403).json({ success: false, message: 'User not authorized for this tale.' });
     }
 
-    const episode = await Episode.create({
-      episodeName,
-      content,
-      images,
-      isNft,
-      candyMachineId: isNft ? candyMachineId : undefined, // Only set CM ID if isNft is true
-      order,
-      status,
-      tale: taleId,
-      author: req.user.id, // Logged-in user (creator of the tale)
-      authorWalletAddress: req.user.walletAddress,
-    });
+    let episodeDoc = await Episode.findOne({ episodeOnChainPda });
 
-    res.status(201).json({
+    if (episodeDoc) { // Episode link already exists, update it
+      episodeDoc.images = images !== undefined ? images : episodeDoc.images;
+      if (episodeNameSnapshot !== undefined) episodeDoc.episodeNameSnapshot = episodeNameSnapshot;
+      if (orderSnapshot !== undefined) episodeDoc.orderSnapshot = Number(orderSnapshot);
+      if (statusSnapshot !== undefined) episodeDoc.statusSnapshot = Number(statusSnapshot);
+      if (isNftSnapshot !== undefined) episodeDoc.isNftSnapshot = isNftSnapshot;
+      
+      // Ensure these key identifiers are consistent (though they shouldn't change for an existing link)
+      episodeDoc.onChainEpisodeIdSeed = onChainEpisodeIdSeed; // Should match if found by episodeOnChainPda
+      episodeDoc.parentTaleOnChainPda = parentTaleOnChainPda; // Should match
+      // taleMongoId should already be set and correct if episodeDoc exists
+
+    } else { // No existing link, create a new one
+      episodeDoc = new Episode({
+        taleMongoId: parentTaleDoc._id, // Use the _id from the fetched parentTaleDoc
+        images: images || [],
+        onChainEpisodeIdSeed,
+        parentTaleOnChainPda,
+        episodeOnChainPda,
+        authorMongoId: req.user.id,
+        authorWalletAddress: req.user.walletAddress,
+        episodeNameSnapshot: episodeNameSnapshot || `Episode (Seed: ${onChainEpisodeIdSeed.substring(0,8)})`,
+        orderSnapshot: orderSnapshot !== undefined ? Number(orderSnapshot) : 0,
+        statusSnapshot: statusSnapshot !== undefined ? Number(statusSnapshot) : 0,
+        isNftSnapshot: isNftSnapshot || false,
+      });
+    }
+
+    const savedEpisodeDoc = await episodeDoc.save();
+
+    res.status(200).json({ // Using 200 for both create/update via this sync endpoint
       success: true,
-      data: episode,
+      message: "Episode data successfully synced with backend.",
+      data: savedEpisodeDoc,
     });
   } catch (error) {
-    console.error('Error creating episode:', error);
+    console.error('Error syncing episode with backend:', error);
     if (error.name === 'ValidationError') {
       const messages = Object.values(error.errors).map(val => val.message);
       return res.status(400).json({ success: false, message: messages.join(', ') });
+    }
+    if (error.code === 11000) { // Duplicate key error
+        // Check which unique index caused the error
+        if (error.message.includes('episodeOnChainPda')) {
+             return res.status(409).json({ success: false, message: `An episode link for on-chain PDA ${req.body.episodeOnChainPda} already exists.`});
+        } else if (error.message.includes('parentTaleOnChainPda_1_onChainEpisodeIdSeed_1')) {
+             return res.status(409).json({ success: false, message: `An episode with seed ${req.body.onChainEpisodeIdSeed} for parent tale PDA ${req.body.parentTaleOnChainPda} already exists.`});
+        }
+        return res.status(409).json({ success: false, message: 'Duplicate key error during episode sync.'});
     }
     next(error);
   }
 };
 
-// @desc    Get all episodes for a specific tale
-// @route   GET /api/tales/:taleId/episodes
-// @access  Public (or based on Tale's visibility)
+// @desc    Get images for a specific on-chain episode (identified by its PDA)
+// @route   GET /api/episodes/images/:episodeOnChainPda
+// @access  Public
+exports.getEpisodeImagesByPda = async (req, res, next) => {
+  try {
+    const episodeOnChainPda = req.params.episodeOnChainPda;
+    const episodeDoc = await Episode.findOne({ episodeOnChainPda }).select('images');
+
+    if (!episodeDoc) {
+      // If no backend record, it means no images are linked yet. This is not an error.
+      return res.status(200).json({ success: true, data: [] }); 
+    }
+
+    res.status(200).json({
+      success: true,
+      data: episodeDoc.images || [], // Ensure it always returns an array
+    });
+  } catch (error) {
+    console.error(`Error getting images for episode PDA ${req.params.episodeOnChainPda}:`, error);
+    next(error);
+  }
+};
+
+// @desc    Delete the backend link (and images) for an on-chain episode.
+//          Client should have already handled on-chain deletion.
+// @route   DELETE /api/episodes/images/:episodeOnChainPda
+// @access  Private (Author of the tale)
+exports.deleteEpisodeImagesByPda = async (req, res, next) => {
+  try {
+    const episodeOnChainPda = req.params.episodeOnChainPda;
+    const episodeDoc = await Episode.findOne({ episodeOnChainPda });
+
+    if (!episodeDoc) {
+      return res.status(404).json({ success: false, message: `Backend record for episode PDA ${episodeOnChainPda} not found.` });
+    }
+
+    // Fetch the parent tale using taleMongoId from the episodeDoc to check authorship.
+    const parentTaleDoc = await Tale.findById(episodeDoc.taleMongoId).select('author');
+    if (!parentTaleDoc) {
+        return res.status(404).json({ success: false, message: `Parent tale for episode link not found. Cannot verify authorship.`});
+    }
+
+    // Authorization
+    if (parentTaleDoc.author.toString() !== req.user.id || req.user.type !== 'creator') {
+      return res.status(403).json({ success: false, message: 'User not authorized to delete this episode record.' });
+    }
+
+    await episodeDoc.deleteOne();
+
+    res.status(200).json({
+      success: true,
+      message: "Backend episode record (and its image links) deleted.",
+      data: {},
+    });
+  } catch (error) {
+    console.error(`Error deleting backend images for episode PDA ${req.params.episodeOnChainPda}:`, error);
+    next(error);
+  }
+};
+
+
+// @desc    Get all backend episode records for a specific tale (identified by tale's MongoDB ID)
+//          Returns images and on-chain identifiers. Client fetches full on-chain data.
+// @route   GET /api/tales/:taleMongoId/episodes
+// @access  Public
 exports.getEpisodesForTale = async (req, res, next) => {
   try {
-    const taleId = req.params.taleId;
-    const tale = await Tale.findById(taleId);
+    const taleMongoId = req.params.taleMongoId; // This is the MongoDB _id of the parent Tale
 
-    if (!tale) {
-      return res.status(404).json({ success: false, message: `Tale not found with id ${taleId}` });
-    }
-
-    // Optional: Check if tale is published before showing episodes to non-authors
-    // if (tale.status !== 'published' && (!req.user || tale.author.toString() !== req.user.id)) {
-    //   return res.status(403).json({ success: false, message: 'Cannot access episodes for this tale.' });
-    // }
-
-    let queryOptions = { tale: taleId };
-    // If user is not the author, only show published episodes
-    if (!req.user || req.user.id.toString() !== tale.author.toString()) {
-        queryOptions.status = 'published';
-    }
-
-
-    const episodes = await Episode.find(queryOptions).sort({ order: 1, createdAt: 1 }); // Sort by order, then by creation
+    const episodes = await Episode.find({ taleMongoId: taleMongoId })
+                                  .sort({ orderSnapshot: 1, createdAt: 1 }) // Sort by snapshot or creation time
+                                  .select('_id images onChainEpisodeIdSeed parentTaleOnChainPda episodeOnChainPda episodeNameSnapshot orderSnapshot statusSnapshot isNftSnapshot');
 
     res.status(200).json({
       success: true,
@@ -84,135 +175,7 @@ exports.getEpisodesForTale = async (req, res, next) => {
       data: episodes,
     });
   } catch (error) {
-    console.error('Error getting episodes for tale:', error);
-    next(error);
-  }
-};
-
-// @desc    Get a single episode by its ID
-// @route   GET /api/episodes/:episodeId  (Note: Changed route slightly for clarity)
-// @access  Public
-exports.getEpisodeById = async (req, res, next) => {
-  try {
-    const episode = await Episode.findById(req.params.episodeId).populate({
-        path: 'tale',
-        select: 'title author status' // Populate some parent tale info
-    });
-
-    if (!episode) {
-      return res.status(404).json({ success: false, message: `Episode not found with id ${req.params.episodeId}` });
-    }
-
-    // Optional: Visibility check based on episode status or parent tale status
-    // if (episode.status !== 'published' && (!req.user || episode.author.toString() !== req.user.id)) {
-    //    return res.status(404).json({ success: false, message: `Episode not found or not published` });
-    // }
-
-    res.status(200).json({
-      success: true,
-      data: episode,
-    });
-  } catch (error) {
-    console.error(`Error getting episode ${req.params.episodeId}:`, error);
-    if (error.name === 'CastError') {
-        return res.status(400).json({ success: false, message: 'Invalid Episode ID format.' });
-    }
-    next(error);
-  }
-};
-
-
-// @desc    Update an episode
-// @route   PUT /api/episodes/:episodeId
-// @access  Private (Author of the tale)
-exports.updateEpisode = async (req, res, next) => {
-  try {
-    let episode = await Episode.findById(req.params.episodeId);
-
-    if (!episode) {
-      return res.status(404).json({ success: false, message: `Episode not found with id ${req.params.episodeId}` });
-    }
-
-    // Authorization: User must be the author of this episode (which is derived from tale author)
-    // and must be a 'creator'
-    if (episode.author.toString() !== req.user.id || req.user.type !== 'creator') {
-      return res.status(403).json({ success: false, message: 'User not authorized to update this episode' });
-    }
-
-    const { episodeName, content, images, isNft, candyMachineId, order, status } = req.body;
-    const updateFields = { ...req.body }; // Start with all fields
-
-    // Ensure candyMachineId is only set if isNft is true, or cleared if isNft becomes false
-    if (typeof isNft === 'boolean') {
-        updateFields.isNft = isNft;
-        if (!isNft) {
-            updateFields.candyMachineId = ''; // Clear CM ID if not an NFT
-        } else if (candyMachineId !== undefined) { // Only update CM ID if provided and isNft is true
-            updateFields.candyMachineId = candyMachineId;
-        } else if (isNft && !episode.candyMachineId && !candyMachineId){
-            // If isNft is true, but no CM ID is provided and none exists, clear it or handle as error
-            // For now, let it pass, user might set it later.
-        }
-    } else if (episode.isNft && candyMachineId !== undefined) { // If isNft field isn't in body, but it's an NFT and CM ID is being updated
-         updateFields.candyMachineId = candyMachineId;
-    }
-
-
-    // Prevent changing author or tale associations directly
-    delete updateFields.author;
-    delete updateFields.authorWalletAddress;
-    delete updateFields.tale;
-
-
-    episode = await Episode.findByIdAndUpdate(req.params.episodeId, updateFields, {
-      new: true,
-      runValidators: true,
-    });
-
-    res.status(200).json({
-      success: true,
-      data: episode,
-    });
-  } catch (error) {
-    console.error(`Error updating episode ${req.params.episodeId}:`, error);
-    if (error.name === 'CastError') {
-        return res.status(400).json({ success: false, message: 'Invalid Episode ID format.' });
-    }
-    if (error.name === 'ValidationError') {
-      const messages = Object.values(error.errors).map(val => val.message);
-      return res.status(400).json({ success: false, message: messages.join(', ') });
-    }
-    next(error);
-  }
-};
-
-// @desc    Delete an episode
-// @route   DELETE /api/episodes/:episodeId
-// @access  Private (Author of the tale)
-exports.deleteEpisode = async (req, res, next) => {
-  try {
-    const episode = await Episode.findById(req.params.episodeId);
-
-    if (!episode) {
-      return res.status(404).json({ success: false, message: `Episode not found with id ${req.params.episodeId}` });
-    }
-
-    // Authorization: User must be the author of this episode
-    if (episode.author.toString() !== req.user.id || req.user.type !== 'creator') {
-      return res.status(403).json({ success: false, message: 'User not authorized to delete this episode' });
-    }
-
-    await episode.deleteOne();
-
-    res.status(200).json({
-      success: true,
-      data: {},
-    });
-  } catch (error) {
-    console.error(`Error deleting episode ${req.params.episodeId}:`, error);
-    if (error.name === 'CastError') {
-        return res.status(400).json({ success: false, message: 'Invalid Episode ID format.' });
-    }
+    console.error('Error getting backend episode records for tale:', error);
     next(error);
   }
 };

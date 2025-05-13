@@ -6,13 +6,17 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-readium_fun = "EZ1GQumWC4UwwQBGERwtnMNS6rJRprjP1HhGfhLC2utJ"
+readium_fun = "EynuKneQ6RX5AAUY8E6Lq6WvNrUVY2F3C8TcFNB7MYh8"
+
+[programs.devnet]
+readium_fun = "EynuKneQ6RX5AAUY8E6Lq6WvNrUVY2F3C8TcFNB7MYh8"
+
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "localnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]

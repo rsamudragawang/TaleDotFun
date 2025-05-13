@@ -100,7 +100,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch,defineEmits } from 'vue';
+import { ref, computed, watch,defineEmits,defineProps } from 'vue';
 import { useWallet, WalletMultiButton } from 'solana-wallets-vue';
 import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
 import { walletAdapterIdentity } from '@metaplex-foundation/umi-signer-wallet-adapters';
@@ -175,7 +175,16 @@ const collectionMetadataDetails = ref({
     // Attributes for collection can be added here if needed, similar to nftBaseMetadata.attributes
 });
 
-
+const episodeProps = defineProps({
+  parentTale: Object,
+  currentEpisodeNameFromParent: String,
+  episodeImageForNft: String,
+  episodeDescriptionForNft: String,
+  isWalletManagedExternally: {
+    type: Boolean,
+    default: false
+  }
+});
 
 // Use UMI's TokenStandard for the select options, but store its value
 const UmiTokenStandardForSelect = TokenStandard; // Alias for template
@@ -221,6 +230,16 @@ function removeItem(index: number) {
   items.value.splice(index, 1);
 }
 
+watch(() => episodeProps.parentTale, (newTale) => {
+    collectionConfig.value.name = newTale?.title ? `${newTale.title} Collection` : 'Episode Collection';
+    const taleSymbol = newTale?.title?.substring(0,3).toUpperCase().replace(/[^A-Z0-9]/g, '');
+    collectionConfig.value.symbol = taleSymbol || 'ECL';
+    cmConfig.value.symbol = collectionConfig.value.symbol;
+}, { immediate: true, deep: true });
+
+watch(() => episodeProps.currentEpisodeNameFromParent, (newName) => {
+    cmConfig.value.namePrefix = newName ? `${newName} #` : 'Episode NFT #';
+}, { immediate: true });
 // --- NEW: Handle Collection Image File ---
 function handleCollectionImageFileChange(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0];
@@ -310,28 +329,26 @@ async function handleCreateCandyMachine() {
     }
   }
 
-  let finalImageUrl = nftBaseMetadata.value.imageUrl;
-  if (nftBaseMetadata.value.imageFile) {
-      const url  = await uploadFileToIPFS(nftBaseMetadata.value.imageFile);
-      finalImageUrl = url.imageUrl
-  }
-  if (!finalImageUrl) throw new Error(`Image missing for shared NFT metadata.`);
+  // let finalImageUrl = nftBaseMetadata.value.imageUrl;
+  // if (nftBaseMetadata.value.imageFile) {
+  //     const url  = await uploadFileToIPFS(nftBaseMetadata.value.imageFile);
+  //     finalImageUrl = url.imageUrl
+  // }
+  // if (!finalImageUrl) throw new Error(`Image missing for shared NFT metadata.`);
   
   // 3. Create metadata JSON
-
+  console.log(episodeProps,"episdoeprops")
   const metadata = {
-    name: cmConfig.value.namePrefix.trim(), // Name in JSON
-    symbol: cmConfig.value.symbol,
-    description: nftBaseMetadata.value.description,
-    seller_fee_basis_points: cmConfig.value.sellerFeeBasisPoints,
-    image: finalImageUrl,
-    attributes: nftBaseMetadata.value.attributes,
-    properties: {
-        files: [{ uri: finalImageUrl, type: nftBaseMetadata.value.imageFile?.type || "image/png" }],
-        category: "image",
-        creators: JSON.parse(cmConfig.value.creatorsJson).map((c:any) => ({ address: c.address, share: c.share })),
-    },
-    collection: { name: collectionConfig.value.name, family: collectionConfig.value.symbol }
+    name: collectionConfig.value.name,
+      symbol: collectionConfig.value.symbol,
+      description: `Official collection for "${episodeProps.parentTale?.title || 'this series of episodes'}". Created for episode: "${episodeProps.currentEpisodeNameFromParent || 'Unnamed Episode'}".`,
+      image: episodeProps.episodeImageForNft,
+      seller_fee_basis_points: collectionConfig.value.sellerFeeBasisPoints,
+      properties: {
+          files: [{ uri: episodeProps.episodeImageForNft, type: "image/png" }], // Assuming PNG
+          category: "image",
+          creators: JSON.parse(cmConfig.value.creatorsJson).map((c: any) => ({ address: c.address, share: c.share })),
+      }
   };
   
   // 4. Upload metadata to IPFS
