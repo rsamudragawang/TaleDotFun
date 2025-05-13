@@ -149,7 +149,9 @@ export default {
             </nav>
         </div>
         <div class="header-right">
-          <WalletMultiButton />
+          <router-link :to="{ name: 'Auth' }" class="profile-link btn btn-primary-nav">
+             Profile
+          </router-link>
           <div class="mobile-menu-button-container">
             <button @click="mobileMenuOpen = !mobileMenuOpen" type="button" class="mobile-menu-button">
               <span class="sr-only">Open main menu</span>
@@ -180,9 +182,11 @@ export default {
 
 <script setup>
 import { WalletMultiButton } from 'solana-wallets-vue';
+import { ref } from 'vue';
 // You can import useWallet here if needed for app-level wallet state logic
 // import { useWallet } from 'solana-wallets-vue';
 // const wallet = useWallet();
+const mobileMenuOpen = ref(false); 
 </script>
 
 <style scoped>
@@ -279,6 +283,8 @@ import { WalletMultiButton } from 'solana-wallets-vue';
   color: #6b7280; /* text-gray-500 */
   text-decoration: none;
   transition: color 0.15s ease-in-out, border-color 0.15s ease-in-out;
+  padding-left: 0.25rem; /* px-1 */
+  padding-right: 0.25rem;
 }
 .dark .nav-link {
   color: #9ca3af; /* dark:text-gray-400 */
@@ -303,11 +309,57 @@ import { WalletMultiButton } from 'solana-wallets-vue';
 .header-right {
   display: flex;
   align-items: center;
+  gap: 0.75rem; /* space-x-3 equivalent */
 }
+
+/* Base Button Style (can be globalized) */
+.btn {
+  padding: 0.5rem 1rem;
+  border: 1px solid transparent;
+  border-radius: 0.375rem; /* rounded-md */
+  font-size: 0.875rem; /* text-sm */
+  font-weight: 500; /* font-medium */
+  line-height: 1.25rem;
+  color: #ffffff; /* text-white */
+  cursor: pointer;
+  text-decoration: none; /* For router-link acting as button */
+  display: inline-flex; /* To align text and potential icon */
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+  box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05); /* shadow-sm */
+}
+.btn:focus {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px #4f46e5; /* Default focus ring, can be overridden */
+}
+
+/* Primary Navigation Button Style (for Profile link) */
+.btn-primary-nav {
+  background-color: #4f46e5; /* bg-indigo-600 */
+}
+.btn-primary-nav:hover {
+  background-color: #4338ca; /* hover:bg-indigo-700 */
+}
+.btn-primary-nav:focus {
+  box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px #4f46e5; /* focus:ring-indigo-500 */
+}
+.dark .btn-primary-nav {
+  background-color: #6366f1; /* dark:bg-indigo-500 */
+}
+.dark .btn-primary-nav:hover {
+  background-color: #818cf8; /* dark:hover:bg-indigo-400 */
+}
+
+.profile-link {
+  /* Now inherits from .btn and .btn-primary-nav */
+}
+
 
 /* Mobile Menu Styles */
 .mobile-menu-button-container {
-  margin-left: 0.75rem; /* ml-3 */
+  /* margin-left: 0.75rem; /* ml-3 -> now handled by gap on header-right */
 }
 @media (min-width: 768px) { /* md: */
   .mobile-menu-button-container {
@@ -323,6 +375,7 @@ import { WalletMultiButton } from 'solana-wallets-vue';
   color: #9ca3af; /* text-gray-400 */
   background-color: transparent;
   border: none;
+  cursor: pointer;
 }
 .dark .mobile-menu-button {
   color: #6b7280; /* dark:text-gray-500 */
@@ -340,7 +393,7 @@ import { WalletMultiButton } from 'solana-wallets-vue';
   outline-offset: 2px;
   box-shadow: 0 0 0 2px #6366f1; /* focus:ring-2 focus:ring-inset focus:ring-indigo-500 */
 }
-.sr-only { /* Screen reader only utility */
+.sr-only {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -358,14 +411,16 @@ import { WalletMultiButton } from 'solana-wallets-vue';
 }
 
 .mobile-menu {
-  /* No md:hidden here, controlled by v-if */
+  /* Visibility controlled by v-if */
 }
 .mobile-menu-content {
   padding-left: 0.5rem; /* px-2 */
   padding-right: 0.5rem;
   padding-top: 0.5rem; /* pt-2 */
   padding-bottom: 0.75rem; /* pb-3 */
-  column-gap: 0.25rem; /* space-y-1 (converted to column-gap for flex) */
+}
+.mobile-menu-content > a:not(:last-child) { /* space-y-1 approx */
+    margin-bottom: 0.25rem;
 }
 @media (min-width: 640px) { /* sm: */
   .mobile-menu-content {
@@ -402,6 +457,9 @@ import { WalletMultiButton } from 'solana-wallets-vue';
   background-color: rgba(79, 70, 229, 0.3); /* dark:bg-indigo-900/30 */
   color: #c7d2fe; /* dark:text-indigo-300 */
 }
+.profile-link-mobile { /* Ensure it looks like other mobile links */
+    /* Inherits .mobile-nav-link styles */
+}
 
 
 /* Main Content Area */
@@ -413,6 +471,8 @@ import { WalletMultiButton } from 'solana-wallets-vue';
   margin-right: auto;
   padding-top: 1.5rem; /* py-6 */
   padding-bottom: 1.5rem;
+  padding-left: 1rem; /* Added for consistency with header */
+  padding-right: 1rem;
 }
 @media (min-width: 640px) { /* sm: */
   .main-content {
@@ -432,7 +492,7 @@ import { WalletMultiButton } from 'solana-wallets-vue';
   background-color: #e5e7eb; /* bg-gray-200 */
   text-align: center;
   padding: 1rem; /* p-4 */
-  margin-top: auto; /* mt-auto */
+  margin-top: auto; /* Pushes footer to bottom in flex column */
 }
 .dark .app-footer {
   background-color: #030712; /* dark:bg-gray-950 */
@@ -445,6 +505,7 @@ import { WalletMultiButton } from 'solana-wallets-vue';
   color: #9ca3af; /* dark:text-gray-400 */
 }
 
-/* WalletMultiButton might need global styles if not imported with its own CSS */
-/* Ensure you have `@import 'solana-wallets-vue/styles.css';` in your main.js or global style file */
+/* WalletMultiButton global styles should be imported in main.js or a global CSS file:
+   @import 'solana-wallets-vue/styles.css';
+*/
 </style>

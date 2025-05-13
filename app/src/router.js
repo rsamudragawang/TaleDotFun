@@ -57,7 +57,7 @@ const routes = [
     component: Home,
   },
   {
-    path: '/auth',
+    path: '/profile',
     name: 'Auth',
     component: Auth,
   },
