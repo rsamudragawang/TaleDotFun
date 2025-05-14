@@ -137,7 +137,7 @@
           <p v-if="!isContentLockedForDisplay(episode)" class="episode-description" v-html="episode.contentPreview ? renderMarkdownMini(episode.contentPreview) : 'No content preview.'"></p>
           <div v-else class="episode-locked-message">
             Full content available after minting this NFT episode.
-            <router-link v-if="episode.isNft && episode.candyMachineId" :to="{ name: 'MintPage', params: { candyMachineAddress: episode.candyMachineId } }" class="link mint-now-link">Mint Now</router-link>
+            <router-link v-if="episode.isNft && episode.candyMachineId" :to="{ name: 'MintPage', params: { candyMachineAddress: episode.candyMachineId, episodeOnChainPda: episode.onChainPda } }" class="link mint-now-link">Mint Now</router-link>
           </div>
 
           <div class="episode-tags-container">
@@ -194,17 +194,16 @@ const props = defineProps({
     }
   },
   appUser: { type: Object, default: null },
-  userMintActivities: { type: Array, default: () => [] }
+  userMintActivities: { type: Array, default: () => [] } // Kept for now, but primary check is on-chain
 });
 
 // --- Configuration ---
 const API_BASE_URL = import.meta.env.VITE_APP_AUTH_API_URL || 'http://localhost:3000/api';
 const JWT_TOKEN_KEY = 'readium_fun_jwt_token';
 const SOLANA_RPC_URL = import.meta.env.VITE_RPC_ENDPOINT || 'https://api.devnet.solana.com';
-// **CRITICAL: Ensure this path is correct and the IDL file is up-to-date after `anchor build`**
 import idlFromFile from '../../../target/idl/readium_fun.json';
-const PROGRAM_ID = new PublicKey("EynuKneQ6RX5AAUY8E6Lq6WvNrUVY2F3C8TcFNB7MYh8"); // From your IDL
-const idl = idlFromFile; // Use the imported IDL from your `anchor build`
+const PROGRAM_ID = new PublicKey("EynuKneQ6RX5AAUY8E6Lq6WvNrUVY2F3C8TcFNB7MYh8");
+const idl = idlFromFile;
 const MAX_ONCHAIN_EPISODE_ID_SEED_LENGTH = 32;
 
 // --- Wallet and Program ---
@@ -216,16 +215,19 @@ let program;
 // --- Component State ---
 const fetchedOnChainEpisodes = ref([]);
 const backendImageLinks = ref(new Map());
-const isLoadingEpisodes = ref(false);
+const isLoadingEpisodes = ref(false); // General loading for episode list
+const userOnChainMintActivities = ref([]);
+const isLoadingUserMintActivities = ref(false);
+
 const showEpisodeModal = ref(false);
-const isSavingEpisode = ref(false);
-const isUploadingImagesModal = ref(false);
+const isSavingEpisode = ref(false); // For combined on-chain and backend save
+const isUploadingImagesModal = ref(false); // Specifically for image uploads in modal
 
 const defaultEpisodeForm = () => ({
   editingExistingOnChainEpisode: false,
   episodeOnChainPdaToEdit: null,
   onChainEpisodeIdSeed: '',
-  imageSetId: null, // MongoDB _id of the EpisodeImageSet from backend
+  imageSetId: null,
   episodeName: '',
   contentMarkdown: '',
   originalContentMarkdown: '',
@@ -233,7 +235,7 @@ const defaultEpisodeForm = () => ({
   status: 0,
   isNft: false,
   candyMachineId: '',
-  images: [], // Local array for form editing, synced with backend
+  images: [],
 });
 const currentEpisodeForm = ref(defaultEpisodeForm());
 
@@ -264,7 +266,7 @@ const combinedEpisodes = computed(() => {
       status: ocEpisode.account.status,
       isNft: ocEpisode.account.isNft,
       candyMachineId: ocEpisode.account.candyMachineId,
-      imageSetId: ocEpisode.account.imageSetId, // This is the MongoDB _id for the image set
+      imageSetId: ocEpisode.account.imageSetId,
       author: ocEpisode.account.author,
       images: imagesFromBackend,
       backendImagesSynced: backendImageLinks.value.has(episodePdaString),
@@ -282,35 +284,50 @@ const isEpisodeContentLockedForModalForm = computed(() => {
 const isContentLockedForDisplay = (episode) => {
   if (!episode.isNft) return false;
   if (isAuthorOfParentTale.value) return false;
-  if (!props.appUser || !props.appUser.walletAddress) return true;
-  return !props.userMintActivities.some(
-    activity => activity.candyMachineId === episode.candyMachineId &&
-                episode.candyMachineId &&
-                activity.userWalletAddress === props.appUser.walletAddress
-  );
+  if (!props.appUser || !props.appUser.walletAddress || !wallet.publicKey.value) return true;
+
+  return !userOnChainMintActivities.value.some(activity => {
+    const acc = activity.account;
+    if (acc.episodeOnChainPda && acc.episodeOnChainPda.toString() === episode.onChainPda) {
+      return acc.userWallet.toString() === wallet.publicKey.value.toString() && acc.status === 0; // 0 for Active
+    }
+    if (episode.candyMachineId && acc.candyMachineId.toString() === new PublicKey(episode.candyMachineId).toString()) {
+       return acc.userWallet.toString() === wallet.publicKey.value.toString() && acc.status === 0;
+    }
+    return false;
+  });
 };
 
+
 // --- Watcher for wallet and parentTale ---
-watch([() => wallet.connected.value, () => props.parentTale?.onChainPdaString],
-  ([isConnected, parentPdaStr], [wasConnected, oldParentPdaStr]) => {
+watch([() => wallet.connected.value, () => props.parentTale?.onChainPdaString, () => props.appUser?.walletAddress],
+  async ([isConnected, parentPdaStr, userWalletAddr], [wasConnected, oldParentPdaStr, oldUserWalletAddr]) => {
   if (isConnected && wallet.publicKey.value) {
+    let programJustInitialized = false;
     if (!program || provider?.wallet?.publicKey?.toBase58() !== wallet.publicKey.value.toBase58()) {
         if (wallet.wallet.value && wallet.wallet.value.adapter) {
              provider = new AnchorProvider(connection, wallet.wallet.value.adapter, AnchorProvider.defaultOptions());
              try {
                 program = new Program(idl, provider);
                 console.log("EpisodeManager: Anchor Program Initialized.");
+                programJustInitialized = true;
              } catch (e) { console.error("EpisodeManager: Error initializing Program:", e); program = null; provider = null; return; }
         } else { console.error("EpisodeManager: Wallet adapter missing."); program = null; provider = null; return; }
     }
+    
     if (program && parentPdaStr) {
-        fetchAllEpisodeData();
+        await fetchAllEpisodeData();
     }
+    if (program && userWalletAddr && (programJustInitialized || userWalletAddr !== oldUserWalletAddr)) {
+        await fetchUserOnChainMintActivities();
+    }
+
   } else {
     program = null; provider = null;
     if (wasConnected === true && !isConnected) {
         fetchedOnChainEpisodes.value = [];
         backendImageLinks.value.clear();
+        userOnChainMintActivities.value = [];
     }
   }
 }, { immediate: true, deep: true });
@@ -332,67 +349,98 @@ backendApiClient.interceptors.request.use(config => { const token = localStorage
 backendApiClient.interceptors.response.use(response => response.data, error => { const msg = error.response?.data?.message || error.message || 'Backend API error.'; showUiMessage(msg, 'error'); return Promise.reject(error.response?.data || { message: msg, error }); });
 
 // --- Data Fetching ---
+async function fetchUserOnChainMintActivities() {
+    if (!program || !props.appUser?.walletAddress) {
+        userOnChainMintActivities.value = [];
+        return;
+    }
+    isLoadingUserMintActivities.value = true;
+    try {
+        const userPk = new PublicKey(props.appUser.walletAddress);
+        const activities = await program.account.mintActivity.all([
+            { memcmp: { offset: 8, bytes: userPk.toBase58() } }
+        ]);
+        userOnChainMintActivities.value = activities;
+    } catch (error) {
+        console.error("Error fetching user's on-chain mint activities:", error);
+        userOnChainMintActivities.value = [];
+    } finally {
+        isLoadingUserMintActivities.value = false;
+    }
+}
+
 async function fetchAllEpisodeData() {
-  if (!program || !props.parentTale?.onChainPdaString) {
-    console.warn("EpisodeManager: Program or Parent Tale PDA not ready for fetching episodes.");
-    return;
-  }
+  if (!program || !props.parentTale?.onChainPdaString) { return; }
   isLoadingEpisodes.value = true;
   fetchedOnChainEpisodes.value = [];
   backendImageLinks.value.clear();
   try {
     const parentTalePk = new PublicKey(props.parentTale.onChainPdaString);
     const onChainAccounts = await program.account.episode.all([
-      { memcmp: { offset: 8 + 32, bytes: parentTalePk.toBase58() } } // Filter by parent_tale
+      { memcmp: { offset: 8 + 32, bytes: parentTalePk.toBase58() } }
     ]);
     fetchedOnChainEpisodes.value = onChainAccounts;
 
     if (onChainAccounts.length > 0) {
-      showUiMessage(`Fetched ${onChainAccounts.length} on-chain episodes. Getting images...`, "info", 3000);
       const newImageLinks = new Map();
       for (const ocEpisode of onChainAccounts) {
         const episodePdaString = ocEpisode.publicKey.toString();
-        const imageSetId = ocEpisode.account.imageSetId; // Get imageSetId from on-chain data
+        const imageSetId = ocEpisode.account.imageSetId;
         if (imageSetId) {
           try {
-            // Backend Endpoint: GET /api/episodes/image-set/:imageSetId
             const imgResponse = await backendApiClient.get(`/episodes/image-set/${imageSetId}`);
-            if (imgResponse.success && Array.isArray(imgResponse.data)) { // Assuming backend returns { success: true, data: [...] }
+            if (imgResponse.success && Array.isArray(imgResponse.data)) {
               newImageLinks.set(episodePdaString, imgResponse.data);
             } else { newImageLinks.set(episodePdaString, []); }
-          } catch (e) { newImageLinks.set(episodePdaString, []); console.warn(`No images for ${episodePdaString} / imageSetId ${imageSetId}`) }
+          } catch (e) { newImageLinks.set(episodePdaString, []); }
         } else {
-          newImageLinks.set(episodePdaString, []); // No imageSetId on chain, so no images from backend
+          newImageLinks.set(episodePdaString, []);
         }
       }
       backendImageLinks.value = newImageLinks;
-    } else {
-      showUiMessage("No on-chain episodes found for this tale.", "info");
     }
-  } catch (error) { console.error('Error fetching all episode data:', error); showUiMessage(`Fetch error: ${error.message}`, "error");}
+  } catch (error) { showUiMessage(`Fetch error: ${error.message}`, "error");}
   finally { isLoadingEpisodes.value = false; }
 }
 
 // --- Modal & Form Logic ---
-function toggleNftSectionInForm() { if (!currentEpisodeForm.value.isNft) { showCandyMachineCreatorFormInModal.value = false; currentEpisodeForm.value.candyMachineId = ''; } }
+function toggleNftSectionInForm() {
+  if (!currentEpisodeForm.value.isNft) {
+    showCandyMachineCreatorFormInModal.value = false;
+    currentEpisodeForm.value.candyMachineId = '';
+  }
+}
 function triggerCandyMachineSetupInModal(isEditing = false) {
-    if (currentEpisodeForm.value.images.length > 0) { uploadedEpisodeImageForNftModal.value = currentEpisodeForm.value.images[0]; }
-    else { showUiMessage("Add at least one image URL first. This will be used for the NFT.", "warning"); return; }
+    if (currentEpisodeForm.value.images.length > 0) {
+        uploadedEpisodeImageForNftModal.value = currentEpisodeForm.value.images[0];
+    } else {
+        showUiMessage("Add at least one image URL first. This image will be used for the NFT if you set up a new Candy Machine.", "warning");
+        // Do not return, allow proceeding if they plan to link an existing CM ID
+    }
     if (!isEditing) currentEpisodeForm.value.candyMachineId = '';
     manualCandyMachineIdModal.value = '';
     showCandyMachineCreatorFormInModal.value = true;
 }
 function assignManualCandyMachineIdInModal() {
-    if (manualCandyMachineIdModal.value.trim()) { currentEpisodeForm.value.candyMachineId = manualCandyMachineIdModal.value.trim(); showCandyMachineCreatorFormInModal.value = false; manualCandyMachineIdModal.value = ''; }
-    else { showUiMessage("Enter valid CM ID.", "warning"); }
+    if (manualCandyMachineIdModal.value.trim()) {
+        currentEpisodeForm.value.candyMachineId = manualCandyMachineIdModal.value.trim();
+        showCandyMachineCreatorFormInModal.value = false;
+        manualCandyMachineIdModal.value = '';
+    } else { showUiMessage("Please enter a valid CM ID.", "warning"); }
 }
-function handleCandyMachineCreatedInModal(newCmId) { currentEpisodeForm.value.candyMachineId = newCmId; showCandyMachineCreatorFormInModal.value = false; }
+function handleCandyMachineCreatedInModal(newCmId) {
+  currentEpisodeForm.value.candyMachineId = newCmId;
+  showCandyMachineCreatorFormInModal.value = false;
+}
 
 function openEpisodeModal() {
   if (!isAuthorOfParentTale.value) { showUiMessage("Not authorized.", "error"); return; }
   currentEpisodeForm.value = defaultEpisodeForm();
-  currentEpisodeForm.value.order = combinedEpisodes.value.length;
+  currentEpisodeForm.value.order = combinedEpisodes.value.length; // Default order
   currentEpisodeForm.value.editingExistingOnChainEpisode = false;
+  currentEpisodeForm.value.episodeOnChainPdaToEdit = null;
+  currentEpisodeForm.value.imageSetId = null; // Ensure new episodes start with no imageSetId
+
   showCandyMachineCreatorFormInModal.value = false;
   uploadedEpisodeImageForNftModal.value = '';
   manualCandyMachineIdModal.value = '';
@@ -413,11 +461,11 @@ async function openEditModal(combinedEpisode) {
     currentEpisodeForm.value = {
         editingExistingOnChainEpisode: true,
         episodeOnChainPdaToEdit: combinedEpisode.onChainPda,
-        onChainEpisodeIdSeed: combinedEpisode.onChainEpisodeIdSeed, // Important for on-chain update context
-        imageSetId: combinedEpisode.imageSetId, // MongoDB _id of the image set
+        onChainEpisodeIdSeed: combinedEpisode.onChainEpisodeIdSeed,
+        imageSetId: combinedEpisode.imageSetId, // Load existing imageSetId from on-chain data
         episodeName: combinedEpisode.name,
         contentMarkdown: contentMarkdownForForm,
-        originalContentMarkdown: contentMarkdownForForm,
+        originalContentMarkdown: contentMarkdownForForm, // For diff checking
         order: combinedEpisode.order,
         status: combinedEpisode.status,
         isNft: combinedEpisode.isNft,
@@ -432,12 +480,14 @@ async function openEditModal(combinedEpisode) {
 
 function closeEpisodeModal() {
     showEpisodeModal.value = false;
-    currentEpisodeForm.value = defaultEpisodeForm();
+    currentEpisodeForm.value = defaultEpisodeForm(); // Reset form
     showCandyMachineCreatorFormInModal.value = false;
     uploadedEpisodeImageForNftModal.value = '';
     const fileInput = document.getElementById('episodeImageFilesModal');
     if (fileInput) fileInput.value = null;
+    isUploadingImagesModal.value = false; // Reset upload indicator
 }
+
 async function handleImageFilesChangeInModal(event) {
   const files = event.target.files;
   if (!files || files.length === 0) return;
@@ -448,7 +498,7 @@ async function handleImageFilesChangeInModal(event) {
   showUiMessage(`Uploading ${files.length} image(s)...`, "info", 0);
   try {
     for (const file of files) {
-      const uploadResult = await uploadFileToIPFS(file);
+      const uploadResult = await uploadFileToIPFS(file); // Assumes this is from your pinataService
       if (uploadResult.success && uploadResult.imageUrl) {
         currentEpisodeForm.value.images.push(uploadResult.imageUrl);
       } else { throw new Error(uploadResult.error || `Failed to upload ${file.name}`); }
@@ -460,11 +510,22 @@ async function handleImageFilesChangeInModal(event) {
   } catch (uploadError) { showUiMessage(`Image upload error: ${uploadError.message}`, "error"); }
   finally { isUploadingImagesModal.value = false; event.target.value = null; }
 }
-function addImageFieldInForm() { if (currentEpisodeForm.value.images.length < 10) currentEpisodeForm.value.images.push(''); else showUiMessage("Max 10 images.", "warning");}
+
+function addImageFieldInForm() {
+  if (currentEpisodeForm.value.images.length < 10) {
+    currentEpisodeForm.value.images.push('');
+  } else {
+    showUiMessage("Max 10 images.", "warning");
+  }
+}
+
 function removeImageFieldInForm(index) {
   const removed = currentEpisodeForm.value.images.splice(index, 1)[0];
-  if (uploadedEpisodeImageForNftModal.value === removed && currentEpisodeForm.value.images.length > 0) uploadedEpisodeImageForNftModal.value = currentEpisodeForm.value.images[0];
-  else if (currentEpisodeForm.value.images.length === 0) uploadedEpisodeImageForNftModal.value = '';
+  if (uploadedEpisodeImageForNftModal.value === removed && currentEpisodeForm.value.images.length > 0) {
+    uploadedEpisodeImageForNftModal.value = currentEpisodeForm.value.images[0];
+  } else if (currentEpisodeForm.value.images.length === 0) {
+    uploadedEpisodeImageForNftModal.value = '';
+  }
 }
 
 async function handleSaveEpisode() {
@@ -475,7 +536,7 @@ async function handleSaveEpisode() {
   
   isSavingEpisode.value = true;
   let contentCidForOnChain = '';
-  let finalImageSetId = currentEpisodeForm.value.imageSetId; // For updates, use existing one from form
+  let finalImageSetId = currentEpisodeForm.value.imageSetId; // Use existing if editing, will be updated if new/changed
 
   try {
     // Step 1: Upload content markdown to IPFS (if new or changed)
@@ -485,31 +546,37 @@ async function handleSaveEpisode() {
       showUiMessage("Uploading content to IPFS...", "info", 0);
       const textFileName = `${(currentEpisodeForm.value.episodeName || 'ep').replace(/\s+/g, '_')}_${Date.now()}.md`;
       const textUploadResult = await uploadTextToIPFS(currentEpisodeForm.value.contentMarkdown, textFileName);
-      if (textUploadResult.success) contentCidForOnChain = textUploadResult.ipfsHash;
-      else throw new Error(textUploadResult.error || "Content IPFS upload failed");
+      if (textUploadResult.success) {
+        contentCidForOnChain = textUploadResult.ipfsHash;
+        showUiMessage("Content uploaded to IPFS.", "info", 1000);
+      } else {
+        throw new Error(textUploadResult.error || "Content IPFS upload failed");
+      }
     } else if (currentEpisodeForm.value.editingExistingOnChainEpisode) {
+        // If editing and markdown didn't change, use existing CID from the loaded on-chain data
         const existingOcEpisode = fetchedOnChainEpisodes.value.find(ep => ep.publicKey.toString() === currentEpisodeForm.value.episodeOnChainPdaToEdit);
         contentCidForOnChain = existingOcEpisode?.account?.contentCid || '';
     }
 
-    // Step 2: Create/Update ImageSet in Backend
+    // Step 2: Create/Update ImageSet in Backend (sends current list of images)
     showUiMessage("Syncing images with backend...", "info", 0);
     const imageSetPayload = {
         images: currentEpisodeForm.value.images.filter(img => img && img.trim() !== ''),
-        existingImageSetId: currentEpisodeForm.value.editingExistingOnChainEpisode ? finalImageSetId : null,
-        // Optional: If needed for backend logic during image set creation/update
-        // parentTaleOnChainPda: props.parentTale.onChainPdaString, 
+        existingImageSetId: currentEpisodeForm.value.imageSetId, // Pass if editing existing image set
+        // Optional: If your backend uses these for context when creating/updating image set
+        // parentTaleOnChainPda: props.parentTale.onChainPdaString,
         // taleMongoId: props.parentTale.mongoId 
     };
+    // This backend endpoint should handle create (if existingImageSetId is null) or update
     const imageSetResponse = await backendApiClient.post('/episodes/image-set', imageSetPayload);
     if (!imageSetResponse.success || !imageSetResponse.imageSetId) {
         throw new Error(imageSetResponse.message || "Failed to create/update image set in backend.");
     }
     finalImageSetId = imageSetResponse.imageSetId; // This is the MongoDB _id to store on-chain
-    showUiMessage("Image set synced with backend.", "info", 2000);
+    showUiMessage("Image set synced with backend.", "info", 1500);
 
     // Step 3: Prepare On-Chain Data & Perform Transaction
-    const onChainMethodArgs = [
+    const onChainMethodArgs = [ // For update_episode
         currentEpisodeForm.value.episodeName,
         contentCidForOnChain,
         finalImageSetId, // Store the MongoDB _id of the image set
@@ -519,7 +586,7 @@ async function handleSaveEpisode() {
         currentEpisodeForm.value.isNft ? currentEpisodeForm.value.candyMachineId : "",
     ];
     let episodeOnChainPdaString;
-    let usedEpisodeIdSeed = currentEpisodeForm.value.onChainEpisodeIdSeed;
+    let usedEpisodeIdSeed = currentEpisodeForm.value.onChainEpisodeIdSeed; // From form if editing
 
     if (currentEpisodeForm.value.editingExistingOnChainEpisode && currentEpisodeForm.value.episodeOnChainPdaToEdit) {
       showUiMessage("Updating on-chain episode...", "info", 0);
@@ -537,7 +604,9 @@ async function handleSaveEpisode() {
       );
       episodeOnChainPdaString = pda.toString();
 
-      await program.methods.createEpisode(usedEpisodeIdSeed, ...onChainMethodArgs)
+      // Prepend seed for create_episode
+      const createArgs = [usedEpisodeIdSeed, ...onChainMethodArgs];
+      await program.methods.createEpisode(...createArgs)
       .accounts({
         episodeAccount: episodeOnChainPdaString,
         parentTaleAccount: new PublicKey(props.parentTale.onChainPdaString),
@@ -551,15 +620,16 @@ async function handleSaveEpisode() {
     if (finalImageSetId && episodeOnChainPdaString) {
         showUiMessage("Linking on-chain PDA to backend image set...", "info", 0);
         try {
+            // Use the dedicated linking endpoint or ensure createOrUpdateImageSet can handle this
             await backendApiClient.put(`/episodes/image-set/${finalImageSetId}/link-pda`, {
-                episodeOnChainPda: episodeOnChainPdaString,
+                linkedEpisodeOnChainPda: episodeOnChainPdaString, // The PDA of the on-chain episode
                 parentTaleOnChainPda: props.parentTale.onChainPdaString, // For context
                 onChainEpisodeIdSeed: usedEpisodeIdSeed // For context
             });
-            showUiMessage("Backend image set linked to on-chain episode.", "info", 2000);
+            showUiMessage("Backend image set linked.", "info", 1500);
         } catch (linkError) {
             console.warn("Failed to link on-chain PDA to backend image set:", linkError);
-            showUiMessage("Could not finalize backend link for images. Please try editing again to establish link.", "warning");
+            showUiMessage("Could not finalize backend link for images. You might need to edit the episode again to establish the link if it's missing.", "warning");
         }
     }
 
@@ -583,16 +653,16 @@ async function confirmDeleteCombinedEpisode(combinedEpisode) {
     if (window.confirm(`Delete episode "${combinedEpisode.name}"? This will delete from on-chain and backend.`)) {
         isSavingEpisode.value = true;
         try {
-            const imageSetIdToDelete = combinedEpisode.imageSetId;
+            const imageSetIdToDelete = combinedEpisode.imageSetId; // Get from on-chain data
 
             if (combinedEpisode.onChainPda) {
                 showUiMessage("Deleting on-chain episode...", "info", 0);
                 await program.methods.deleteEpisode()
                     .accounts({ episodeAccount: new PublicKey(combinedEpisode.onChainPda), author: wallet.publicKey.value })
                     .rpc();
-                showUiMessage("On-chain episode deleted.", "info", 2000);
+                showUiMessage("On-chain episode deleted.", "info", 1500);
             } else {
-                 showUiMessage("No on-chain PDA found. Skipping on-chain delete.", "warning");
+                 showUiMessage("No on-chain PDA found for this episode. Skipping on-chain delete.", "warning");
             }
 
             if (imageSetIdToDelete) {
@@ -600,7 +670,7 @@ async function confirmDeleteCombinedEpisode(combinedEpisode) {
                 await backendApiClient.delete(`/episodes/image-set/${imageSetIdToDelete}`);
                 showUiMessage("Backend image set deleted.", "success");
             } else {
-                 showUiMessage("No imageSetId found. Skipping backend image set delete.", "warning");
+                 showUiMessage("No imageSetId found for this episode. Skipping backend image set delete.", "warning");
             }
             fetchAllEpisodeData();
         } catch (error) {
@@ -611,27 +681,32 @@ async function confirmDeleteCombinedEpisode(combinedEpisode) {
 }
 
 // --- Lifecycle Hooks and Watchers ---
-watch(() => props.parentTale?.onChainPdaString, (newParentPda, oldParentPda) => {
-  if (newParentPda && newParentPda !== oldParentPda && program && props.parentTale.onChainAccountData) {
+watch(() => props.parentTale?.onChainPdaString, (newParentPda) => {
+  if (newParentPda && program && props.parentTale.onChainAccountData) {
     fetchAllEpisodeData();
   } else if (!newParentPda) {
     fetchedOnChainEpisodes.value = [];
     backendImageLinks.value.clear();
   }
-}, { immediate: true, deep: true });
+}, { immediate: true, deep: true }); // deep:true on parentTale might be too sensitive if onChainAccountData changes often without PdaString changing.
 
-watch(() => props.appUser?.id, (newUserId) => {
-    if (newUserId && props.parentTale?.onChainPdaString && program) {
-        fetchAllEpisodeData();
+watch(() => props.appUser?.walletAddress, (newUserWalletAddr, oldUserWalletAddr) => {
+    if (newUserWalletAddr && newUserWalletAddr !== oldUserWalletAddr && program) {
+        fetchUserOnChainMintActivities();
+    } else if (!newUserWalletAddr) {
+        userOnChainMintActivities.value = [];
     }
-});
+}, { immediate: true });
+
 
 onMounted(() => {
   if (typeof window !== 'undefined' && !window.Buffer) { window.Buffer = Buffer; }
-  // Initial data fetch is handled by watchers
+  // Initial data fetch is primarily handled by the watchers now.
 });
 
 </script>
+
+
 
 <style scoped>
 /* Main Container */
