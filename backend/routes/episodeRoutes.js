@@ -1,41 +1,43 @@
 // readium-fun/backend/routes/episodeRoutes.js
 const express = require('express');
 const {
-  syncOnChainEpisodeWithBackend,
-  getEpisodesForTale,       // This is nested under /api/tales/:taleMongoId/episodes
-  getEpisodeImagesByPda,
-  // updateEpisodeByPda,    // Renamed syncOnChainEpisodeWithBackend handles updates too if doc exists
-  deleteEpisodeImagesByPda
+  createImageSet,
+  deleteImageSet,
+  getImageSetById,
+  updateImageSet
 } = require('../controllers/episodeController');
 
 const { protect, authorize } = require('../middleware/authMiddleware');
 
-// Router for routes nested under /api/tales/:taleMongoId/episodes
+// Router for routes nested under /api/tales/:taleMongoId/
+// This will now primarily be for listing backend image set records associated with a Tale
 const taleNestedEpisodeRouter = express.Router({ mergeParams: true });
 
-// GET /api/tales/:taleMongoId/episodes - Get all backend episode links for a tale
-taleNestedEpisodeRouter.route('/')
-  .get(getEpisodesForTale); // Fetches lean backend records (images, identifiers, snapshots)
+// GET /api/tales/:taleMongoId/episodes/image-sets - Get all backend image set links for a tale
+// Note the path change to avoid conflict if you have other /episodes routes under tales
+// taleNestedEpisodeRouter.route('/image-sets')
+//   .get(protect, getImageSetsForTale); // Protect if it shows sensitive links or for admin only
 
 
-// Router for individual episode operations, typically mounted at /api/episodes
+// Router for individual episode image set operations, typically mounted at /api/episodes
 const individualEpisodeRouter = express.Router();
 
-// POST /api/episodes/sync-onchain-data - Create or update backend link after on-chain tx
-// This endpoint can also be used for updates if the client sends existing episodeOnChainPda
-individualEpisodeRouter.post('/sync-onchain-data', protect, authorize('creator'), syncOnChainEpisodeWithBackend);
+// POST /api/episodes/image-set - Create or Update an image set.
+// Client sends images. If existingImageSetId is provided in body, it's an update.
+// Returns the MongoDB _id of the image set (imageSetId).
+individualEpisodeRouter.post('/image-set', protect, authorize('creator'), createImageSet);
 
-// GET /api/episodes/images/:episodeOnChainPda - Get images for a specific on-chain episode PDA
-individualEpisodeRouter.get('/images/:episodeOnChainPda', getEpisodeImagesByPda);
+// GET /api/episodes/image-set/:imageSetId - Get an image set by its MongoDB _id
+// This :imageSetId is the ID that was stored on-chain.
+individualEpisodeRouter.get('/image-set/:imageSetId', getImageSetById);
 
-// PUT /api/episodes/images/:episodeOnChainPda - Update images/snapshots for an on-chain episode PDA
-// The syncOnChainEpisodeWithBackend can handle updates if an episodeDoc is found.
-// If you want a dedicated PUT for updating only images/snapshots for an existing link:
-// individualEpisodeRouter.put('/images/:episodeOnChainPda', protect, authorize('creator'), updateEpisodeImagesAndSnapshotsByPda);
-// For simplicity, the POST /sync-onchain-data can serve as an upsert for the backend link.
+// DELETE /api/episodes/image-set/:imageSetId - Delete an image set by its MongoDB _id
+individualEpisodeRouter.delete('/image-set/:imageSetId', protect, authorize('creator'), deleteImageSet);
 
-// DELETE /api/episodes/images/:episodeOnChainPda - Delete backend link & images for an on-chain episode PDA
-individualEpisodeRouter.delete('/images/:episodeOnChainPda', protect, authorize('creator'), deleteEpisodeImagesByPda);
-
+// Optional: Endpoint to link an existing EpisodeImageSet to an on-chain episode's PDA
+// This could be a PUT request to /api/episodes/image-set/:imageSetId/link-onchain
+// individualEpisodeRouter.put('/image-set/:imageSetId/link-onchain', protect, authorize('creator'), linkImageSetToOnChainEpisode);
+// The controller for this would update the episodeOnChainPda, parentTaleOnChainPda, onChainEpisodeIdSeed fields.
+// For simplicity, the current createOrUpdateImageSet can handle this if these fields are sent in the body.
 
 module.exports = { taleNestedEpisodeRouter, individualEpisodeRouter };
