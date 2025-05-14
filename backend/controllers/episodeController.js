@@ -1,6 +1,8 @@
-// readium-fun/backend/controllers/episodeController.js
+// readium-fun-master/backend/controllers/episodeController.js
 const Episode = require('../models/Episode');
-const Tale = require('../models/Tale'); // To verify parent tale and ownership
+const Tale = require('../models/Tale');
+const MintActivity = require('../models/MintActivity'); // <-- IMPORT MintActivity model
+const { protect } = require('../middleware/authMiddleware'); // For req.user
 
 // @desc    Create a new episode for a specific tale
 // @route   POST /api/tales/:taleId/episodes
@@ -14,7 +16,6 @@ exports.createEpisode = async (req, res, next) => {
       return res.status(404).json({ success: false, message: `Tale not found with id ${taleId}` });
     }
 
-    // Authorization: Only the author of the tale (who must be a 'creator') can add episodes
     if (tale.author.toString() !== req.user.id || req.user.type !== 'creator') {
       return res.status(403).json({ success: false, message: 'User not authorized to add episodes to this tale' });
     }
@@ -24,17 +25,20 @@ exports.createEpisode = async (req, res, next) => {
     if (!episodeName) {
         return res.status(400).json({ success: false, message: 'Episode name is required.' });
     }
+    if (images && !Array.isArray(images)) {
+        return res.status(400).json({ success: false, message: 'Images must be an array of strings.' });
+    }
 
     const episode = await Episode.create({
       episodeName,
-      content,
-      images,
-      isNft,
-      candyMachineId: isNft ? candyMachineId : undefined, // Only set CM ID if isNft is true
-      order,
-      status,
+      content: content || '',
+      images: images || [],
+      isNft: isNft || false,
+      candyMachineId: (isNft && candyMachineId) ? candyMachineId : '',
+      order: order === undefined ? 0 : Number(order),
+      status: status || 'draft',
       tale: taleId,
-      author: req.user.id, // Logged-in user (creator of the tale)
+      author: req.user.id,
       authorWalletAddress: req.user.walletAddress,
     });
 
@@ -48,13 +52,16 @@ exports.createEpisode = async (req, res, next) => {
       const messages = Object.values(error.errors).map(val => val.message);
       return res.status(400).json({ success: false, message: messages.join(', ') });
     }
+    if (error.name === 'CastError' && error.path === '_id') {
+        return res.status(400).json({ success: false, message: 'Invalid Tale ID format.' });
+    }
     next(error);
   }
 };
 
 // @desc    Get all episodes for a specific tale
 // @route   GET /api/tales/:taleId/episodes
-// @access  Public (or based on Tale's visibility)
+// @access  Public (content within episodes might be gated)
 exports.getEpisodesForTale = async (req, res, next) => {
   try {
     const taleId = req.params.taleId;
@@ -64,53 +71,128 @@ exports.getEpisodesForTale = async (req, res, next) => {
       return res.status(404).json({ success: false, message: `Tale not found with id ${taleId}` });
     }
 
-    // Optional: Check if tale is published before showing episodes to non-authors
-    // if (tale.status !== 'published' && (!req.user || tale.author.toString() !== req.user.id)) {
-    //   return res.status(403).json({ success: false, message: 'Cannot access episodes for this tale.' });
-    // }
-
     let queryOptions = { tale: taleId };
-    // If user is not the author, only show published episodes
-    if (!req.user || req.user.id.toString() !== tale.author.toString()) {
-        queryOptions.status = 'published';
+    const isAuthorViewing = req.user && (req.user.id.toString() === tale.author.toString() || req.user.type === 'admin');
+
+    if (!isAuthorViewing) {
+        queryOptions.status = 'published'; // Non-authors only see published episodes
     }
 
+    const episodes = await Episode.find(queryOptions).sort({ order: 1, createdAt: 1 }).lean(); // Use .lean() for plain JS objects
 
-    const episodes = await Episode.find(queryOptions).sort({ order: 1, createdAt: 1 }); // Sort by order, then by creation
+    // Process episodes for token-gated content
+    const processedEpisodes = await Promise.all(episodes.map(async (episode) => {
+      let displayImages = episode.images || [];
+      let displayContent = episode.content; // By default, show content
+
+      if (episode.isNft && episode.candyMachineId) {
+        const isEpisodeAuthor = req.user && (req.user.id.toString() === episode.author.toString() || req.user.type === 'admin');
+        console.log(req.user)
+        
+        if (!isEpisodeAuthor) { // If not the author, check mint status
+          let hasMinted = false;
+          if (req.user && req.user.walletAddress) {
+            const mintRecord = await MintActivity.findOne({
+              userWalletAddress: req.user.walletAddress,
+              candyMachineId: episode.candyMachineId,
+              // You might also want to check for a specific nftMintAddress if the CM can mint multiple different NFTs for an episode
+            });
+            if (mintRecord) {
+              hasMinted = true;
+            }
+          }
+
+          if (!hasMinted) {
+            // User has not minted this NFT episode
+            displayImages = (episode.images && episode.images.length > 0) ? [episode.images[0]] : []; // Show only first image as teaser
+            // displayContent = "Full content available after minting this NFT episode."; // Or a snippet, or nothing
+            // For now, we'll still show content, but limit images. You can adjust content visibility here too.
+          }
+        }
+        // If isEpisodeAuthor, they see everything by default (displayImages and displayContent remain as fetched)
+      }
+
+      return {
+        ...episode,
+        images: displayImages, // Return potentially modified image list
+        content: displayContent, // Return potentially modified content
+      };
+    }));
 
     res.status(200).json({
       success: true,
-      count: episodes.length,
-      data: episodes,
+      count: processedEpisodes.length,
+      data: processedEpisodes,
     });
   } catch (error) {
     console.error('Error getting episodes for tale:', error);
+     if (error.name === 'CastError' && error.path === '_id') {
+        return res.status(400).json({ success: false, message: 'Invalid Tale ID format.' });
+    }
     next(error);
   }
 };
 
 // @desc    Get a single episode by its ID
-// @route   GET /api/episodes/:episodeId  (Note: Changed route slightly for clarity)
-// @access  Public
+// @route   GET /api/episodes/:episodeId
+// @access  Public (content within episode might be gated)
 exports.getEpisodeById = async (req, res, next) => {
   try {
-    const episode = await Episode.findById(req.params.episodeId).populate({
-        path: 'tale',
-        select: 'title author status' // Populate some parent tale info
-    });
+    const episode = await Episode.findById(req.params.episodeId)
+        .populate({ path: 'tale', select: 'title author status authorWalletAddress' })
+        .lean();
 
     if (!episode) {
       return res.status(404).json({ success: false, message: `Episode not found with id ${req.params.episodeId}` });
     }
 
-    // Optional: Visibility check based on episode status or parent tale status
-    // if (episode.status !== 'published' && (!req.user || episode.author.toString() !== req.user.id)) {
-    //    return res.status(404).json({ success: false, message: `Episode not found or not published` });
-    // }
+    const parentTale = episode.tale; // Tale is already populated
+    let displayImages = episode.images || [];
+    let displayContent = episode.content;
+
+    // Authorization for draft episodes or draft tales
+    const isAuthorViewing = req.user && (
+        (parentTale && req.user.id.toString() === parentTale.author.toString()) ||
+        req.user.id.toString() === episode.author.toString() ||
+        req.user.type === 'admin'
+    );
+
+    if (episode.status === 'draft' && !isAuthorViewing) {
+        return res.status(403).json({ success: false, message: 'You are not authorized to view this draft episode.' });
+    }
+    if (parentTale && parentTale.status === 'draft' && !isAuthorViewing) {
+        return res.status(403).json({ success: false, message: 'This episode belongs to a draft tale and is not publicly viewable.' });
+    }
+
+
+    if (episode.isNft && episode.candyMachineId) {
+        if (!isAuthorViewing) { // If not the author, check mint status
+            let hasMinted = false;
+            if (req.user && req.user.walletAddress) {
+                const mintRecord = await MintActivity.findOne({
+                    userWalletAddress: req.user.walletAddress,
+                    candyMachineId: episode.candyMachineId,
+                });
+                if (mintRecord) {
+                    hasMinted = true;
+                }
+            }
+            if (!hasMinted) {
+                displayImages = (episode.images && episode.images.length > 0) ? [episode.images[0]] : [];
+                // displayContent = "Full content available after minting this NFT episode."; // Or keep content visible
+            }
+        }
+    }
+    
+    const processedEpisode = {
+        ...episode,
+        images: displayImages,
+        content: displayContent,
+    };
 
     res.status(200).json({
       success: true,
-      data: episode,
+      data: processedEpisode,
     });
   } catch (error) {
     console.error(`Error getting episode ${req.params.episodeId}:`, error);
@@ -133,36 +215,27 @@ exports.updateEpisode = async (req, res, next) => {
       return res.status(404).json({ success: false, message: `Episode not found with id ${req.params.episodeId}` });
     }
 
-    // Authorization: User must be the author of this episode (which is derived from tale author)
-    // and must be a 'creator'
     if (episode.author.toString() !== req.user.id || req.user.type !== 'creator') {
       return res.status(403).json({ success: false, message: 'User not authorized to update this episode' });
     }
 
     const { episodeName, content, images, isNft, candyMachineId, order, status } = req.body;
-    const updateFields = { ...req.body }; // Start with all fields
+    const updateFields = {};
 
-    // Ensure candyMachineId is only set if isNft is true, or cleared if isNft becomes false
-    if (typeof isNft === 'boolean') {
-        updateFields.isNft = isNft;
-        if (!isNft) {
-            updateFields.candyMachineId = ''; // Clear CM ID if not an NFT
-        } else if (candyMachineId !== undefined) { // Only update CM ID if provided and isNft is true
-            updateFields.candyMachineId = candyMachineId;
-        } else if (isNft && !episode.candyMachineId && !candyMachineId){
-            // If isNft is true, but no CM ID is provided and none exists, clear it or handle as error
-            // For now, let it pass, user might set it later.
-        }
-    } else if (episode.isNft && candyMachineId !== undefined) { // If isNft field isn't in body, but it's an NFT and CM ID is being updated
-         updateFields.candyMachineId = candyMachineId;
+    if (episodeName !== undefined) updateFields.episodeName = episodeName;
+    if (content !== undefined) updateFields.content = content;
+    if (images !== undefined) updateFields.images = Array.isArray(images) ? images : [];
+    if (order !== undefined) updateFields.order = Number(order);
+    if (status !== undefined) updateFields.status = status;
+    if (isNft !== undefined) updateFields.isNft = isNft;
+
+    if (isNft === true && candyMachineId !== undefined) {
+        updateFields.candyMachineId = candyMachineId;
+    } else if (isNft === false) {
+        updateFields.candyMachineId = '';
+    } else if (isNft === undefined && episode.isNft && candyMachineId !== undefined) {
+        updateFields.candyMachineId = candyMachineId;
     }
-
-
-    // Prevent changing author or tale associations directly
-    delete updateFields.author;
-    delete updateFields.authorWalletAddress;
-    delete updateFields.tale;
-
 
     episode = await Episode.findByIdAndUpdate(req.params.episodeId, updateFields, {
       new: true,
@@ -197,7 +270,6 @@ exports.deleteEpisode = async (req, res, next) => {
       return res.status(404).json({ success: false, message: `Episode not found with id ${req.params.episodeId}` });
     }
 
-    // Authorization: User must be the author of this episode
     if (episode.author.toString() !== req.user.id || req.user.type !== 'creator') {
       return res.status(403).json({ success: false, message: 'User not authorized to delete this episode' });
     }

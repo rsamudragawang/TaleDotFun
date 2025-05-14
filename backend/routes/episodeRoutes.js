@@ -21,7 +21,7 @@ const router = express.Router({ mergeParams: true }); // mergeParams allows acce
 // e.g., GET  /api/tales/:taleId/episodes
 router.route('/')
   .post(protect, authorize('creator'), createEpisode) // Create an episode for a tale
-  .get(getEpisodesForTale);                           // Get all episodes for a tale
+  .get(protect,getEpisodesForTale);                           // Get all episodes for a tale
 
 // Routes for specific episodes (not nested under /tales/:taleId/)
 // These will be mounted at /api/episodes
