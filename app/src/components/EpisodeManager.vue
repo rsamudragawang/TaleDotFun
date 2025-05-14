@@ -1,10 +1,10 @@
 <template>
   <div class="episode-manager-container">
     <h2 class="main-section-title">
-      Episodes for "{{ parentTale?.title || 'Tale' }}"
+      Episodes for "{{ parentTale?.onChainAccountData?.title || 'Tale' }}"
     </h2>
 
-    <div v-if="isAuthorAndCreator" class="add-episode-button-container">
+    <div v-if="isAuthorOfParentTale" class="add-episode-button-container">
       <button @click="openEpisodeModal()" class="btn btn-primary">
         + Add New Episode
       </button>
@@ -18,103 +18,100 @@
     <div v-if="showEpisodeModal" class="modal-overlay">
       <div class="modal-content-wrapper">
         <h3 class="modal-title">
-          {{ editingEpisode ? 'Edit Episode' : 'Create New Episode' }}
+          {{ currentEpisodeForm.editingExistingOnChainEpisode ? 'Edit Episode' : 'Create New Episode' }}
         </h3>
         <form @submit.prevent="handleSaveEpisode" class="modal-form">
           <div class="form-group">
-            <label for="episodeName" class="form-label">Episode Name:</label>
-            <input type="text" id="episodeName" v-model="currentEpisode.episodeName" class="form-input" required />
+            <label for="episodeName" class="form-label">Episode Name (On-Chain):</label>
+            <input type="text" id="episodeName" v-model="currentEpisodeForm.episodeName" class="form-input" required maxlength="100" />
           </div>
 
           <div class="nft-linking-section">
             <label class="form-label checkbox-label">
-              <input type="checkbox" v-model="currentEpisode.isNft" @change="toggleNftSection" class="form-checkbox" />
-              This episode is linked to an NFT (requires mint to view full content)
+              <input type="checkbox" v-model="currentEpisodeForm.isNft" @change="toggleNftSectionInForm" class="form-checkbox" />
+              This episode is linked to an NFT
             </label>
           </div>
 
-          <div v-if="currentEpisode.isNft" class="nft-details-section">
-            <div v-if="currentEpisode.candyMachineId && !showCandyMachineCreatorForm" class="cm-id-display-wrapper">
-                <label class="form-label">Associated Candy Machine ID:</label>
-                <input type="text" :value="currentEpisode.candyMachineId" class="form-input form-input-readonly" readonly />
-                <button type="button" @click="triggerCandyMachineSetup(true)" class="btn btn-warning btn-xs edit-cm-button">
+          <div v-if="currentEpisodeForm.isNft" class="nft-details-section">
+            <div v-if="currentEpisodeForm.candyMachineId && !showCandyMachineCreatorFormInModal" class="cm-id-display-wrapper">
+                <label class="form-label">Associated Candy Machine ID (On-Chain):</label>
+                <input type="text" :value="currentEpisodeForm.candyMachineId" class="form-input form-input-readonly" readonly />
+                <button type="button" @click="triggerCandyMachineSetupInModal(true)" class="btn btn-warning btn-xs edit-cm-button">
                     Edit/Recreate CM
                 </button>
             </div>
-            <div v-else-if="showCandyMachineCreatorForm" class="cm-creator-wrapper">
+            <div v-else-if="showCandyMachineCreatorFormInModal" class="cm-creator-wrapper">
                 <p class="cm-creator-prompt">
-                    Setting up a new Candy Machine for: <strong>{{ currentEpisode.episodeName }}</strong>
+                    Setting up a new Candy Machine for: <strong>{{ currentEpisodeForm.episodeName }}</strong>
                 </p>
                 <CandyMachineCreator
-                    :parentTale="parentTale"
-                    :currentEpisodeNameFromParent="currentEpisode.episodeName"
-                    :episodeImageForNft="uploadedEpisodeImageForNft"
-                    :episodeDescriptionForNft="currentEpisode.content"
+                    :parentTale="parentTale.onChainAccountData"
+                    :currentEpisodeNameFromParent="currentEpisodeForm.episodeName"
+                    :episodeImageForNft="uploadedEpisodeImageForNftModal"
+                    :episodeDescriptionForNft="currentEpisodeForm.contentMarkdown"
                     :isWalletManagedExternally="true"
-                    @candyMachineCreated="handleCandyMachineCreated"
-                    @cancelCandyMachineCreation="showCandyMachineCreatorForm = false"
+                    @candyMachineCreated="handleCandyMachineCreatedInModal"
+                    @cancelCandyMachineCreation="showCandyMachineCreatorFormInModal = false"
                 />
-                <button type="button" @click="showCandyMachineCreatorForm = false" class="btn btn-secondary cancel-cm-button">
+                <button type="button" @click="showCandyMachineCreatorFormInModal = false" class="btn btn-secondary cancel-cm-button">
                     Cancel CM Setup
                 </button>
             </div>
             <div v-else class="cm-setup-options">
-                 <button type="button" @click="triggerCandyMachineSetup(false)" class="btn btn-info btn-sm">
+                <button type="button" @click="triggerCandyMachineSetupInModal(false)" class="btn btn-info btn-sm">
                     Setup New Candy Machine
                 </button>
                 <span class="cm-options-divider">OR</span>
-                <input type="text" v-model="manualCandyMachineId" class="form-input manual-cm-input" placeholder="Enter Existing CM ID" />
-                <button type="button" @click="assignManualCandyMachineId" class="btn btn-secondary btn-sm assign-cm-button">Assign</button>
+                <input type="text" v-model="manualCandyMachineIdModal" class="form-input manual-cm-input" placeholder="Enter Existing CM ID" />
+                <button type="button" @click="assignManualCandyMachineIdInModal" class="btn btn-secondary btn-sm assign-cm-button">Assign</button>
             </div>
           </div>
-          <div v-if="!isEpisodeContentLockedForModal" class="content-fields-wrapper">
+
+          <div class="content-fields-wrapper">
             <div class="form-group">
-              <label for="episodeContent" class="form-label">Content (Description for Episode/NFT):</label>
-              <textarea id="episodeContent" v-model="currentEpisode.content" class="form-textarea"></textarea>
+              <label for="episodeContent" class="form-label">Content (Markdown for IPFS):</label>
+              <textarea id="episodeContent" v-model="currentEpisodeForm.contentMarkdown" class="form-textarea"></textarea>
             </div>
             <div class="image-upload-section">
-              <label class="form-label">Episode Images (Max 10, first image used for NFT if applicable):</label>
-              <div v-for="(imgUrl, index) in currentEpisode.images" :key="index" class="image-input-row">
-                <input type="url" v-model="currentEpisode.images[index]" class="form-input image-url-input" placeholder="https://gateway.pinata.cloud/ipfs/..." />
-                <button type="button" @click="removeImageField(index)" class="btn btn-danger btn-xs remove-image-button">Remove</button>
+              <label class="form-label">Episode Images (URLs/CIDs managed by backend, max 10):</label>
+              <div v-for="(imgUrl, index) in currentEpisodeForm.images" :key="index" class="image-input-row">
+                <input type="url" v-model="currentEpisodeForm.images[index]" class="form-input image-url-input" placeholder="https://gateway.pinata.cloud/ipfs/..." />
+                <button type="button" @click="removeImageFieldInForm(index)" class="btn btn-danger btn-xs remove-image-button">Remove</button>
               </div>
-              <button type="button" @click="addImageField" v-if="currentEpisode.images.length < 10" class="btn btn-secondary btn-sm add-image-button">
-                + Add Image URL
+              <button type="button" @click="addImageFieldInForm" v-if="currentEpisodeForm.images.length < 10" class="btn btn-secondary btn-sm add-image-button">
+                + Add Image URL/CID
               </button>
               <div class="file-upload-wrapper">
-                  <label for="episodeImageFiles" class="form-label">Or Upload New Images:</label>
-                  <input type="file" id="episodeImageFiles" @change="handleImageFilesChange" class="form-file-input" multiple accept="image/*" />
-                  <small class="form-text">Selected files will be uploaded to Pinata. URLs will be added above.</small>
-                  <div v-if="isUploadingImages" class="upload-indicator">
-                      <span class="spinner-inline"></span> Uploading images to Pinata...
+                  <label for="episodeImageFilesModal" class="form-label">Or Upload New Images to Pinata:</label>
+                  <input type="file" id="episodeImageFilesModal" @change="handleImageFilesChangeInModal" class="form-file-input" multiple accept="image/*" />
+                  <small class="form-text">Selected files will be uploaded. URLs will be added above.</small>
+                  <div v-if="isUploadingImagesModal" class="upload-indicator">
+                      <span class="spinner-inline"></span> Uploading images...
                   </div>
               </div>
             </div>
           </div>
-          <div v-else class="info-box locked-content-message">
-            Content and images for this NFT-linked episode are locked.
-            <span v-if="!props.appUser" class="login-prompt">Please connect your wallet and log in.</span>
-            <span v-else class="login-prompt">You may need to mint this NFT to view or edit its full content.</span>
-          </div>
 
           <div class="form-group">
-            <label for="episodeOrder" class="form-label">Order (Optional):</label>
-            <input type="number" id="episodeOrder" v-model.number="currentEpisode.order" class="form-input" min="0" />
+            <label for="episodeOrder" class="form-label">Order (On-Chain):</label>
+            <input type="number" id="episodeOrder" v-model.number="currentEpisodeForm.order" class="form-input" min="0" />
           </div>
-           <div class="form-group">
-            <label for="episodeStatus" class="form-label">Status:</label>
-            <select id="episodeStatus" v-model="currentEpisode.status" class="form-select">
-                <option value="draft">Draft</option>
-                <option value="published">Published</option>
+          <div class="form-group">
+            <label for="episodeStatus" class="form-label">Status (On-Chain):</label>
+            <select id="episodeStatus" v-model.number="currentEpisodeForm.status" class="form-select">
+              <option value="0">Draft</option>
+              <option value="1">Published</option>
+              <option value="2">Archived</option>
             </select>
           </div>
 
           <div class="modal-actions">
             <button type="button" @click="closeEpisodeModal" class="btn btn-secondary">Cancel</button>
             <button type="submit"
-                    :disabled="isSavingEpisode || isUploadingImages || (currentEpisode.isNft && showCandyMachineCreatorForm && !currentEpisode.candyMachineId)"
+                    :disabled="isSavingEpisode || isUploadingImagesModal || (currentEpisodeForm.isNft && showCandyMachineCreatorFormInModal && !currentEpisodeForm.candyMachineId)"
                     class="btn btn-success">
-              {{ isSavingEpisode ? 'Saving...' : (editingEpisode ? 'Update Episode' : 'Create Episode') }}
+              {{ isSavingEpisode ? 'Saving...' : (currentEpisodeForm.editingExistingOnChainEpisode ? 'Update Episode' : 'Create Episode') }}
             </button>
           </div>
         </form>
@@ -125,43 +122,46 @@
       <div class="spinner"></div>
       <p>Loading episodes...</p>
     </div>
-    <div v-else-if="episodes.length === 0" class="info-box no-episodes-message">
+    <div v-else-if="combinedEpisodes.length === 0 && parentTale?.onChainAccountData" class="info-box no-episodes-message">
       This tale has no episodes yet.
-      <span v-if="isAuthorAndCreator"> Why not add the first one?</span>
+      <span v-if="isAuthorOfParentTale"> Why not add the first one?</span>
+    </div>
+    <div v-else-if="!parentTale?.onChainAccountData" class="info-box no-episodes-message">
+        Parent tale data not available. Ensure `TaleDetailView` is passing the correct `parentTale` prop.
     </div>
     <div v-else class="episodes-grid">
-      <div v-for="episode in episodes" :key="episode._id" class="episode-item">
+      <div v-for="episode in combinedEpisodes" :key="episode.onChainPda" class="episode-item">
         <div class="episode-item-content">
-          <h4 class="episode-name">{{ episode.episodeName }} (Order: {{episode.order !== undefined ? episode.order : 'N/A'}})</h4>
+          <h4 class="episode-name">{{ episode.name }} (Order: {{episode.order !== undefined ? episode.order : 'N/A'}})</h4>
           
-          <p v-if="!isContentLockedForListedEpisode(episode)" class="episode-description" v-html="episode.content ? renderMarkdownMini(episode.content) : 'No content provided.'"></p>
+          <p v-if="!isContentLockedForDisplay(episode)" class="episode-description" v-html="episode.contentPreview ? renderMarkdownMini(episode.contentPreview) : 'No content preview.'"></p>
           <div v-else class="episode-locked-message">
             Full content available after minting this NFT episode.
-            <router-link v-if="episode.isNft && episode.candyMachineId" :to="{ name: 'MintPage', params: { candyMachineAddress: episode.candyMachineId } }" class="link mint-now-link">Mint Now</router-link>
+            <router-link v-if="episode.isNft && episode.candyMachineId" :to="{ name: 'MintPage', params: { candyMachineAddress: episode.candyMachineId, episodeOnChainPda: episode.onChainPda } }" class="link mint-now-link">Mint Now</router-link>
           </div>
 
           <div class="episode-tags-container">
             <span v-if="episode.isNft" class="tag tag-nft">🔗 NFT-Linked</span>
             <span v-if="episode.isNft && episode.candyMachineId" class="tag tag-cm-ref">
-              Ref: {{shortenAddress(episode.candyMachineId, 4)}}
+              CM: {{shortenAddress(episode.candyMachineId, 4)}}
             </span>
-            <span class="tag tag-status">{{episode.status}}</span>
+            <span class="tag tag-status">{{ getStatusString(episode.status) }}</span>
+             <span v-if="!episode.backendImagesSynced" class="tag tag-warning">Images Not Synced</span>
           </div>
 
-          <div v-if="!isContentLockedForListedEpisode(episode) && episode.images && episode.images.length > 0" class="episode-image-gallery">
+          <div v-if="!isContentLockedForDisplay(episode) && episode.images && episode.images.length > 0" class="episode-image-gallery">
             <a v-for="(img, idx) in episode.images" :key="idx" :href="img" target="_blank" class="episode-image-link">
               <img :src="img" alt="Episode Image" class="episode-thumbnail" @error="setDefaultImage" />
             </a>
           </div>
-           <div v-else-if="isContentLockedForListedEpisode(episode) && episode.images && episode.images.length > 0" class="episode-image-teaser">
-             <img :src="episode.images[0]" @error="setDefaultImage" alt="Episode Thumbnail" class="episode-thumbnail episode-thumbnail-locked" />
-             <small class="image-teaser-text">More images after mint.</small>
+           <div v-else-if="isContentLockedForDisplay(episode) && episode.images && episode.images.length > 0" class="episode-image-teaser">
+            <img :src="episode.images[0]" @error="setDefaultImage" alt="Episode Thumbnail" class="episode-thumbnail episode-thumbnail-locked" />
+            <small class="image-teaser-text">More images after mint.</small>
           </div>
-
         </div>
-        <div v-if="isAuthorAndCreator" class="episode-actions">
-          <button @click="editEpisode(episode)" class="btn btn-warning btn-xs">Edit</button>
-          <button @click="confirmDeleteEpisode(episode._id)" class="btn btn-danger btn-xs">Delete</button>
+        <div v-if="isAuthorOfParentTale" class="episode-actions">
+          <button @click="openEditModal(episode)" class="btn btn-warning btn-xs">Edit</button>
+          <button @click="confirmDeleteCombinedEpisode(episode)" class="btn btn-danger btn-xs">Delete</button>
         </div>
       </div>
     </div>
@@ -171,332 +171,542 @@
 <script setup>
 import { ref, onMounted, computed, watch, defineProps } from 'vue';
 import axios from 'axios';
-import { uploadFileToIPFS } from '../services/pinataService';
 import { marked } from 'marked';
-import CandyMachineCreator from './CandyMachineCreator.vue'; // Import the component
+import { useWallet, WalletMultiButton } from 'solana-wallets-vue';
+import { Connection, PublicKey, SystemProgram } from '@solana/web3.js';
+import { Program, AnchorProvider } from '@coral-xyz/anchor';
+import { Buffer } from 'buffer';
+import { v4 as uuidv4 } from 'uuid';
+
+import CandyMachineCreator from './CandyMachineCreator.vue';
+import { uploadFileToIPFS, uploadTextToIPFS } from '../services/pinataService';
 
 const props = defineProps({
-  parentTale: { type: Object, required: true },
+  parentTale: {
+    type: Object,
+    required: true,
+    validator: (value) => {
+      return value &&
+             typeof value.onChainPdaString === 'string' &&
+             typeof value.onChainAccountData === 'object' &&
+             value.onChainAccountData.author &&
+             (value.mongoId === null || value.mongoId === undefined || typeof value.mongoId === 'string');
+    }
+  },
   appUser: { type: Object, default: null },
-  userMintActivities: { type: Array, default: () => [] }
+  userMintActivities: { type: Array, default: () => [] } // Kept for now, but primary check is on-chain
 });
 
+// --- Configuration ---
 const API_BASE_URL = import.meta.env.VITE_APP_AUTH_API_URL || 'http://localhost:3000/api';
 const JWT_TOKEN_KEY = 'readium_fun_jwt_token';
+const SOLANA_RPC_URL = import.meta.env.VITE_RPC_ENDPOINT || 'https://api.devnet.solana.com';
+import idlFromFile from '../../../target/idl/readium_fun.json';
+const PROGRAM_ID = new PublicKey("EynuKneQ6RX5AAUY8E6Lq6WvNrUVY2F3C8TcFNB7MYh8");
+const idl = idlFromFile;
+const MAX_ONCHAIN_EPISODE_ID_SEED_LENGTH = 32;
 
-const episodes = ref([]);
-const isLoadingEpisodes = ref(false);
+// --- Wallet and Program ---
+const wallet = useWallet();
+const connection = new Connection(SOLANA_RPC_URL, "confirmed");
+let provider;
+let program;
+
+// --- Component State ---
+const fetchedOnChainEpisodes = ref([]);
+const backendImageLinks = ref(new Map());
+const isLoadingEpisodes = ref(false); // General loading for episode list
+const userOnChainMintActivities = ref([]);
+const isLoadingUserMintActivities = ref(false);
+
 const showEpisodeModal = ref(false);
-const editingEpisode = ref(null);
-const isSavingEpisode = ref(false);
-const isUploadingImages = ref(false);
+const isSavingEpisode = ref(false); // For combined on-chain and backend save
+const isUploadingImagesModal = ref(false); // Specifically for image uploads in modal
 
-const defaultEpisode = () => ({
+const defaultEpisodeForm = () => ({
+  editingExistingOnChainEpisode: false,
+  episodeOnChainPdaToEdit: null,
+  onChainEpisodeIdSeed: '',
+  imageSetId: null,
   episodeName: '',
-  content: '',
-  images: [],
+  contentMarkdown: '',
+  originalContentMarkdown: '',
+  order: 0,
+  status: 0,
   isNft: false,
   candyMachineId: '',
-  order: 0,
-  status: 'draft',
+  images: [],
 });
-const currentEpisode = ref(defaultEpisode());
-const manualCandyMachineId = ref('');
+const currentEpisodeForm = ref(defaultEpisodeForm());
 
-// State for Candy Machine Creator integration
-const showCandyMachineCreatorForm = ref(false);
-const uploadedEpisodeImageForNft = ref('');
-
+const showCandyMachineCreatorFormInModal = ref(false);
+const uploadedEpisodeImageForNftModal = ref('');
+const manualCandyMachineIdModal = ref('');
 const uiMessage = ref({ text: '', type: 'info' });
-function showUiMessage(msg, type = 'info', duration = 4000) {
-  uiMessage.value = { text: msg, type };
-  if (duration > 0) {
-    setTimeout(() => { uiMessage.value = { text: '', type: 'info' }; }, duration);
-  }
-}
-const shortenAddress = (address, chars = 6) => {
-  if (!address) return '';
-  return `${address.slice(0, chars)}...${address.slice(-chars)}`;
-};
-const setDefaultImage = (event) => {
-  event.target.src = 'https://placehold.co/100x100/gray/white?text=Error';
-};
-const renderMarkdownMini = (markdownText) => {
-    if (!markdownText) return '';
-    const plainText = marked(markdownText, { breaks: true, gfm: true }).replace(/<[^>]+>/g, '');
-    return plainText.length > 150 ? plainText.substring(0, 150) + '...' : plainText;
-};
 
-const isAuthorAndCreator = computed(() => {
+// --- Computed Properties ---
+const isAuthorOfParentTale = computed(() => {
   return props.appUser &&
-         props.parentTale &&
-         (props.appUser.id === props.parentTale.author?._id || props.appUser.walletAddress === props.parentTale.authorWalletAddress) &&
-         props.appUser.type === 'creator';
+         props.parentTale && props.parentTale.onChainAccountData &&
+         props.appUser.walletAddress === props.parentTale.onChainAccountData.author?.toString();
 });
 
-const isEpisodeContentLockedForModal = computed(() => {
-  if (!currentEpisode.value.isNft) return false;
-  if (isAuthorAndCreator.value) return false; 
-  if (!props.appUser || !props.appUser.walletAddress) return true;
-  return !props.userMintActivities.some(
-    activity => activity.candyMachineId === currentEpisode.value.candyMachineId && // Ensure CM ID exists for check
-                currentEpisode.value.candyMachineId && // Add this check
-                activity.userWalletAddress === props.appUser.walletAddress
-  );
+const combinedEpisodes = computed(() => {
+  return fetchedOnChainEpisodes.value.map(ocEpisode => {
+    const episodePdaString = ocEpisode.publicKey.toString();
+    const imagesFromBackend = backendImageLinks.value.get(episodePdaString) || [];
+    return {
+      onChainPda: episodePdaString,
+      onChainEpisodeIdSeed: ocEpisode.account.episodeIdSeed,
+      parentTaleOnChainPda: ocEpisode.account.parentTale.toString(),
+      name: ocEpisode.account.episodeName,
+      contentCid: ocEpisode.account.contentCid,
+      contentPreview: ocEpisode.account.contentCid ? `Content on IPFS: ${ocEpisode.account.contentCid}` : 'No content',
+      order: ocEpisode.account.order,
+      status: ocEpisode.account.status,
+      isNft: ocEpisode.account.isNft,
+      candyMachineId: ocEpisode.account.candyMachineId,
+      imageSetId: ocEpisode.account.imageSetId,
+      author: ocEpisode.account.author,
+      images: imagesFromBackend,
+      backendImagesSynced: backendImageLinks.value.has(episodePdaString),
+      rawOnChainData: ocEpisode.account
+    };
+  }).sort((a, b) => a.order - b.order);
 });
 
-const isContentLockedForListedEpisode = (episode) => {
+const isEpisodeContentLockedForModalForm = computed(() => {
+  if (!currentEpisodeForm.value.isNft) return false;
+  if (isAuthorOfParentTale.value) return false;
+  return !!(currentEpisodeForm.value.editingExistingOnChainEpisode && currentEpisodeForm.value.episodeOnChainPdaToEdit);
+});
+
+const isContentLockedForDisplay = (episode) => {
   if (!episode.isNft) return false;
-  if (props.appUser && (props.appUser.id === episode.author || props.appUser.walletAddress === episode.authorWalletAddress)) {
-      return false;
-  }
-  if (!props.appUser || !props.appUser.walletAddress) return true;
-  return !props.userMintActivities.some(
-    activity => activity.candyMachineId === episode.candyMachineId && // Ensure CM ID exists for check
-                episode.candyMachineId && // Add this check
-                activity.userWalletAddress === props.appUser.walletAddress
-  );
+  if (isAuthorOfParentTale.value) return false;
+  if (!props.appUser || !props.appUser.walletAddress || !wallet.publicKey.value) return true;
+
+  return !userOnChainMintActivities.value.some(activity => {
+    const acc = activity.account;
+    if (acc.episodeOnChainPda && acc.episodeOnChainPda.toString() === episode.onChainPda) {
+      return acc.userWallet.toString() === wallet.publicKey.value.toString() && acc.status === 0; // 0 for Active
+    }
+    if (episode.candyMachineId && acc.candyMachineId.toString() === new PublicKey(episode.candyMachineId).toString()) {
+       return acc.userWallet.toString() === wallet.publicKey.value.toString() && acc.status === 0;
+    }
+    return false;
+  });
 };
 
-const episodeApiClient = axios.create({ baseURL: API_BASE_URL });
-episodeApiClient.interceptors.request.use(config => {
-  const token = localStorage.getItem(JWT_TOKEN_KEY);
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
-episodeApiClient.interceptors.response.use(
-  response => response.data,
-  error => {
-    const message = error.response?.data?.message || error.message || 'An API error occurred.';
-    showUiMessage(message, 'error');
-    return Promise.reject(error.response?.data || { message });
-  }
-);
 
-async function fetchEpisodesForTale() {
-  if (!props.parentTale?._id) return;
-  isLoadingEpisodes.value = true;
-  try {
-    const response = await episodeApiClient.get(`/tales/${props.parentTale._id}/episodes`);
-    if (response.success) {
-      episodes.value = response.data.sort((a, b) => (a.order || 0) - (b.order || 0));
+// --- Watcher for wallet and parentTale ---
+watch([() => wallet.connected.value, () => props.parentTale?.onChainPdaString, () => props.appUser?.walletAddress],
+  async ([isConnected, parentPdaStr, userWalletAddr], [wasConnected, oldParentPdaStr, oldUserWalletAddr]) => {
+  if (isConnected && wallet.publicKey.value) {
+    let programJustInitialized = false;
+    if (!program || provider?.wallet?.publicKey?.toBase58() !== wallet.publicKey.value.toBase58()) {
+        if (wallet.wallet.value && wallet.wallet.value.adapter) {
+             provider = new AnchorProvider(connection, wallet.wallet.value.adapter, AnchorProvider.defaultOptions());
+             try {
+                program = new Program(idl, provider);
+                console.log("EpisodeManager: Anchor Program Initialized.");
+                programJustInitialized = true;
+             } catch (e) { console.error("EpisodeManager: Error initializing Program:", e); program = null; provider = null; return; }
+        } else { console.error("EpisodeManager: Wallet adapter missing."); program = null; provider = null; return; }
     }
-  } finally {
-    isLoadingEpisodes.value = false;
-  }
-}
-
-function toggleNftSection() {
-    if (!currentEpisode.value.isNft) {
-        showCandyMachineCreatorForm.value = false;
-        currentEpisode.value.candyMachineId = '';
+    
+    if (program && parentPdaStr) {
+        await fetchAllEpisodeData();
     }
-    // If isNft is checked, the UI will show options to set up or assign CM ID
-}
+    if (program && userWalletAddr && (programJustInitialized || userWalletAddr !== oldUserWalletAddr)) {
+        await fetchUserOnChainMintActivities();
+    }
 
-function triggerCandyMachineSetup(isEditingExistingCm = false) {
-    if (currentEpisode.value.images.length === 0) {
-        showUiMessage("Please upload or add at least one image for the episode. This image will be used for the NFT.", "warning");
+  } else {
+    program = null; provider = null;
+    if (wasConnected === true && !isConnected) {
+        fetchedOnChainEpisodes.value = [];
+        backendImageLinks.value.clear();
+        userOnChainMintActivities.value = [];
+    }
+  }
+}, { immediate: true, deep: true });
+
+// --- Utility Functions ---
+function showUiMessage(msg, type = 'info', duration = 5000) { uiMessage.value = { text: msg, type }; if (duration > 0) setTimeout(() => { uiMessage.value = { text: '', type: 'info' }; }, duration); }
+const shortenAddress = (address, chars = 6) => address ? `${address.slice(0, chars)}...${address.slice(-chars)}` : '';
+const setDefaultImage = (event) => { event.target.src = 'https://placehold.co/100x100/gray/white?text=Error'; };
+const renderMarkdownMini = (markdownText) => {
+  if (!markdownText) return '';
+  const plainText = marked(markdownText, { breaks: true, gfm: true }).replace(/<[^>]+>/g, '');
+  return plainText.length > 100 ? plainText.substring(0, 100) + '...' : plainText;
+};
+const getStatusString = (statusNum) => (['Draft', 'Published', 'Archived'][statusNum] || 'Unknown');
+
+// --- API Client for Backend ---
+const backendApiClient = axios.create({ baseURL: API_BASE_URL });
+backendApiClient.interceptors.request.use(config => { const token = localStorage.getItem(JWT_TOKEN_KEY); if (token) config.headers.Authorization = `Bearer ${token}`; return config; });
+backendApiClient.interceptors.response.use(response => response.data, error => { const msg = error.response?.data?.message || error.message || 'Backend API error.'; showUiMessage(msg, 'error'); return Promise.reject(error.response?.data || { message: msg, error }); });
+
+// --- Data Fetching ---
+async function fetchUserOnChainMintActivities() {
+    if (!program || !props.appUser?.walletAddress) {
+        userOnChainMintActivities.value = [];
         return;
     }
-    uploadedEpisodeImageForNft.value = currentEpisode.value.images[0]; // Use first image
-
-    if(isEditingExistingCm && currentEpisode.value.candyMachineId) {
-        console.log("Editing/Recreating CM for existing ID:", currentEpisode.value.candyMachineId);
-        // Potentially pre-fill CandyMachineCreator with existing CM details if it supports it
+    isLoadingUserMintActivities.value = true;
+    try {
+        const userPk = new PublicKey(props.appUser.walletAddress);
+        const activities = await program.account.mintActivity.all([
+            { memcmp: { offset: 8, bytes: userPk.toBase58() } }
+        ]);
+        userOnChainMintActivities.value = activities;
+    } catch (error) {
+        console.error("Error fetching user's on-chain mint activities:", error);
+        userOnChainMintActivities.value = [];
+    } finally {
+        isLoadingUserMintActivities.value = false;
     }
-    currentEpisode.value.candyMachineId = ''; // Clear any manually entered ID if creating new
-    manualCandyMachineId.value = '';
-    showCandyMachineCreatorForm.value = true;
 }
 
-function assignManualCandyMachineId() {
-    if (manualCandyMachineId.value.trim()) {
-        currentEpisode.value.candyMachineId = manualCandyMachineId.value.trim();
-        showCandyMachineCreatorForm.value = false;
-        manualCandyMachineId.value = '';
-        showUiMessage(`Candy Machine ID ${currentEpisode.value.candyMachineId} assigned.`, "success");
+async function fetchAllEpisodeData() {
+  if (!program || !props.parentTale?.onChainPdaString) { return; }
+  isLoadingEpisodes.value = true;
+  fetchedOnChainEpisodes.value = [];
+  backendImageLinks.value.clear();
+  try {
+    const parentTalePk = new PublicKey(props.parentTale.onChainPdaString);
+    const onChainAccounts = await program.account.episode.all([
+      { memcmp: { offset: 8 + 32, bytes: parentTalePk.toBase58() } }
+    ]);
+    fetchedOnChainEpisodes.value = onChainAccounts;
+
+    if (onChainAccounts.length > 0) {
+      const newImageLinks = new Map();
+      for (const ocEpisode of onChainAccounts) {
+        const episodePdaString = ocEpisode.publicKey.toString();
+        const imageSetId = ocEpisode.account.imageSetId;
+        if (imageSetId) {
+          try {
+            const imgResponse = await backendApiClient.get(`/episodes/image-set/${imageSetId}`);
+            if (imgResponse.success && Array.isArray(imgResponse.data)) {
+              newImageLinks.set(episodePdaString, imgResponse.data);
+            } else { newImageLinks.set(episodePdaString, []); }
+          } catch (e) { newImageLinks.set(episodePdaString, []); }
+        } else {
+          newImageLinks.set(episodePdaString, []);
+        }
+      }
+      backendImageLinks.value = newImageLinks;
+    }
+  } catch (error) { showUiMessage(`Fetch error: ${error.message}`, "error");}
+  finally { isLoadingEpisodes.value = false; }
+}
+
+// --- Modal & Form Logic ---
+function toggleNftSectionInForm() {
+  if (!currentEpisodeForm.value.isNft) {
+    showCandyMachineCreatorFormInModal.value = false;
+    currentEpisodeForm.value.candyMachineId = '';
+  }
+}
+function triggerCandyMachineSetupInModal(isEditing = false) {
+    if (currentEpisodeForm.value.images.length > 0) {
+        uploadedEpisodeImageForNftModal.value = currentEpisodeForm.value.images[0];
     } else {
-        showUiMessage("Please enter a valid Candy Machine ID.", "warning");
+        showUiMessage("Add at least one image URL first. This image will be used for the NFT if you set up a new Candy Machine.", "warning");
+        // Do not return, allow proceeding if they plan to link an existing CM ID
     }
+    if (!isEditing) currentEpisodeForm.value.candyMachineId = '';
+    manualCandyMachineIdModal.value = '';
+    showCandyMachineCreatorFormInModal.value = true;
+}
+function assignManualCandyMachineIdInModal() {
+    if (manualCandyMachineIdModal.value.trim()) {
+        currentEpisodeForm.value.candyMachineId = manualCandyMachineIdModal.value.trim();
+        showCandyMachineCreatorFormInModal.value = false;
+        manualCandyMachineIdModal.value = '';
+    } else { showUiMessage("Please enter a valid CM ID.", "warning"); }
+}
+function handleCandyMachineCreatedInModal(newCmId) {
+  currentEpisodeForm.value.candyMachineId = newCmId;
+  showCandyMachineCreatorFormInModal.value = false;
 }
 
-function handleCandyMachineCreated(newCmId) {
-  console.log("EpisodeManager received candyMachineCreated event with ID:", newCmId);
-  currentEpisode.value.candyMachineId = newCmId;
-  showCandyMachineCreatorForm.value = false;
-  showUiMessage(`New Candy Machine (${newCmId}) created and assigned to this episode.`, "success");
-}
+function openEpisodeModal() {
+  if (!isAuthorOfParentTale.value) { showUiMessage("Not authorized.", "error"); return; }
+  currentEpisodeForm.value = defaultEpisodeForm();
+  currentEpisodeForm.value.order = combinedEpisodes.value.length; // Default order
+  currentEpisodeForm.value.editingExistingOnChainEpisode = false;
+  currentEpisodeForm.value.episodeOnChainPdaToEdit = null;
+  currentEpisodeForm.value.imageSetId = null; // Ensure new episodes start with no imageSetId
 
-function openEpisodeModal(episodeToEdit = null) {
-  if (!isAuthorAndCreator.value) {
-    showUiMessage("You are not authorized.", "error");
-    return;
-  }
-  showCandyMachineCreatorForm.value = false;
-  uploadedEpisodeImageForNft.value = '';
-  manualCandyMachineId.value = '';
-
-  if (episodeToEdit) {
-    editingEpisode.value = { ...episodeToEdit };
-    currentEpisode.value = {
-      episodeName: episodeToEdit.episodeName,
-      content: episodeToEdit.content || '',
-      images: [...(episodeToEdit.images || [])],
-      isNft: episodeToEdit.isNft || false,
-      candyMachineId: episodeToEdit.candyMachineId || '',
-      order: episodeToEdit.order === undefined ? episodes.value.length : episodeToEdit.order,
-      status: episodeToEdit.status || 'draft',
-    };
-    if (currentEpisode.value.images.length > 0) { // Set image for potential CM creation
-        uploadedEpisodeImageForNft.value = currentEpisode.value.images[0];
-    }
-  } else {
-    editingEpisode.value = null;
-    currentEpisode.value = defaultEpisode();
-    currentEpisode.value.order = episodes.value.length;
-  }
+  showCandyMachineCreatorFormInModal.value = false;
+  uploadedEpisodeImageForNftModal.value = '';
+  manualCandyMachineIdModal.value = '';
   showEpisodeModal.value = true;
 }
 
+async function openEditModal(combinedEpisode) {
+    if (!isAuthorOfParentTale.value) { showUiMessage("Not authorized.", "error"); return; }
+    
+    let contentMarkdownForForm = "";
+    if (combinedEpisode.contentCid) {
+        try {
+            const response = await axios.get(`https://gateway.pinata.cloud/ipfs/${combinedEpisode.contentCid}`);
+            contentMarkdownForForm = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+        } catch (e) { contentMarkdownForForm = `Error fetching content (CID: ${combinedEpisode.contentCid}).`; }
+    }
+
+    currentEpisodeForm.value = {
+        editingExistingOnChainEpisode: true,
+        episodeOnChainPdaToEdit: combinedEpisode.onChainPda,
+        onChainEpisodeIdSeed: combinedEpisode.onChainEpisodeIdSeed,
+        imageSetId: combinedEpisode.imageSetId, // Load existing imageSetId from on-chain data
+        episodeName: combinedEpisode.name,
+        contentMarkdown: contentMarkdownForForm,
+        originalContentMarkdown: contentMarkdownForForm, // For diff checking
+        order: combinedEpisode.order,
+        status: combinedEpisode.status,
+        isNft: combinedEpisode.isNft,
+        candyMachineId: combinedEpisode.candyMachineId || '',
+        images: [...combinedEpisode.images], // Images from combined data (originally from backend)
+    };
+    uploadedEpisodeImageForNftModal.value = currentEpisodeForm.value.images.length > 0 ? currentEpisodeForm.value.images[0] : '';
+    showCandyMachineCreatorFormInModal.value = false;
+    manualCandyMachineIdModal.value = '';
+    showEpisodeModal.value = true;
+}
+
 function closeEpisodeModal() {
-  showEpisodeModal.value = false;
-  editingEpisode.value = null;
-  currentEpisode.value = defaultEpisode();
-  showCandyMachineCreatorForm.value = false;
-  uploadedEpisodeImageForNft.value = '';
-  const fileInput = document.getElementById('episodeImageFiles');
-  if (fileInput) fileInput.value = null;
+    showEpisodeModal.value = false;
+    currentEpisodeForm.value = defaultEpisodeForm(); // Reset form
+    showCandyMachineCreatorFormInModal.value = false;
+    uploadedEpisodeImageForNftModal.value = '';
+    const fileInput = document.getElementById('episodeImageFilesModal');
+    if (fileInput) fileInput.value = null;
+    isUploadingImagesModal.value = false; // Reset upload indicator
 }
 
-async function handleImageFilesChange(event) {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
-    if (currentEpisode.value.images.length + files.length > 10) {
-        showUiMessage("Max 10 images.", "warning");
-        return;
+async function handleImageFilesChangeInModal(event) {
+  const files = event.target.files;
+  if (!files || files.length === 0) return;
+  if (currentEpisodeForm.value.images.length + files.length > 10) {
+    showUiMessage("Max 10 images.", "warning"); return;
+  }
+  isUploadingImagesModal.value = true;
+  showUiMessage(`Uploading ${files.length} image(s)...`, "info", 0);
+  try {
+    for (const file of files) {
+      const uploadResult = await uploadFileToIPFS(file); // Assumes this is from your pinataService
+      if (uploadResult.success && uploadResult.imageUrl) {
+        currentEpisodeForm.value.images.push(uploadResult.imageUrl);
+      } else { throw new Error(uploadResult.error || `Failed to upload ${file.name}`); }
     }
-    isUploadingImages.value = true;
-    showUiMessage(`Uploading ${files.length} image(s)...`, "info", 0);
-    const uploadedUrls = [];
-    try {
-        for (const file of files) {
-            const uploadResult = await uploadFileToIPFS(file);
-            if (uploadResult.success && uploadResult.imageUrl) {
-                uploadedUrls.push(uploadResult.imageUrl);
-            } else {
-                throw new Error(uploadResult.error || `Failed to upload ${file.name}`);
-            }
-        }
-        currentEpisode.value.images.push(...uploadedUrls);
-        if (currentEpisode.value.images.length > 0 && !uploadedEpisodeImageForNft.value) {
-            uploadedEpisodeImageForNft.value = currentEpisode.value.images[0];
-        }
-        showUiMessage(`${uploadedUrls.length} image(s) uploaded.`, "success");
-    } catch (uploadError) {
-        showUiMessage(`Image upload failed: ${uploadError.message}`, "error");
-    } finally {
-        isUploadingImages.value = false;
-        event.target.value = null;
+    if (currentEpisodeForm.value.images.length > 0 && !uploadedEpisodeImageForNftModal.value) {
+        uploadedEpisodeImageForNftModal.value = currentEpisodeForm.value.images[0];
     }
+    showUiMessage(`${currentEpisodeForm.value.images.length} image(s) in list.`, "success");
+  } catch (uploadError) { showUiMessage(`Image upload error: ${uploadError.message}`, "error"); }
+  finally { isUploadingImagesModal.value = false; event.target.value = null; }
 }
 
-function addImageField() {
-  if (currentEpisode.value.images.length < 10) {
-    currentEpisode.value.images.push('');
+function addImageFieldInForm() {
+  if (currentEpisodeForm.value.images.length < 10) {
+    currentEpisodeForm.value.images.push('');
   } else {
     showUiMessage("Max 10 images.", "warning");
   }
 }
-function removeImageField(index) {
-  const removedImage = currentEpisode.value.images.splice(index, 1)[0];
-  if (uploadedEpisodeImageForNft.value === removedImage && currentEpisode.value.images.length > 0) {
-      uploadedEpisodeImageForNft.value = currentEpisode.value.images[0];
-  } else if (currentEpisode.value.images.length === 0) {
-      uploadedEpisodeImageForNft.value = '';
+
+function removeImageFieldInForm(index) {
+  const removed = currentEpisodeForm.value.images.splice(index, 1)[0];
+  if (uploadedEpisodeImageForNftModal.value === removed && currentEpisodeForm.value.images.length > 0) {
+    uploadedEpisodeImageForNftModal.value = currentEpisodeForm.value.images[0];
+  } else if (currentEpisodeForm.value.images.length === 0) {
+    uploadedEpisodeImageForNftModal.value = '';
   }
 }
 
 async function handleSaveEpisode() {
-  if (!props.parentTale?._id) {
-    showUiMessage("Parent tale missing.", "error");
-    return;
+  if (!program || !wallet.publicKey.value || !props.parentTale?.onChainPdaString) {
+    showUiMessage("Wallet, program, or parent tale info missing.", "error"); return;
   }
-  if (currentEpisode.value.isNft && !currentEpisode.value.candyMachineId && !showCandyMachineCreatorForm.value) {
-      showUiMessage("For an NFT-linked episode, please set up a new Candy Machine or assign an existing ID.", "warning");
-      return;
-  }
-   if (currentEpisode.value.isNft && showCandyMachineCreatorForm.value && !currentEpisode.value.candyMachineId) {
-      showUiMessage("Candy Machine setup is in progress. Please complete or cancel it, or assign an existing ID before saving the episode.", "warning");
-      return;
-  }
-
-
+  if (!isAuthorOfParentTale.value) { showUiMessage("Not authorized.", "error"); return; }
+  
   isSavingEpisode.value = true;
-  const payload = {
-    ...currentEpisode.value,
-    images: currentEpisode.value.images.filter(imgUrl => imgUrl && imgUrl.trim() !== ''),
-  };
-  if (!payload.isNft) {
-    payload.candyMachineId = '';
-  }
+  let contentCidForOnChain = '';
+  let finalImageSetId = currentEpisodeForm.value.imageSetId; // Use existing if editing, will be updated if new/changed
 
   try {
-    let response;
-    if (editingEpisode.value) {
-      response = await episodeApiClient.put(`/episodes/${editingEpisode.value._id}`, payload);
-      showUiMessage("Episode updated!", "success");
-    } else {
-      response = await episodeApiClient.post(`/tales/${props.parentTale._id}/episodes`, payload);
-      showUiMessage("Episode created!", "success");
+    // Step 1: Upload content markdown to IPFS (if new or changed)
+    if (currentEpisodeForm.value.contentMarkdown &&
+        (!currentEpisodeForm.value.editingExistingOnChainEpisode ||
+         currentEpisodeForm.value.contentMarkdown !== currentEpisodeForm.value.originalContentMarkdown)) {
+      showUiMessage("Uploading content to IPFS...", "info", 0);
+      const textFileName = `${(currentEpisodeForm.value.episodeName || 'ep').replace(/\s+/g, '_')}_${Date.now()}.md`;
+      const textUploadResult = await uploadTextToIPFS(currentEpisodeForm.value.contentMarkdown, textFileName);
+      if (textUploadResult.success) {
+        contentCidForOnChain = textUploadResult.ipfsHash;
+        showUiMessage("Content uploaded to IPFS.", "info", 1000);
+      } else {
+        throw new Error(textUploadResult.error || "Content IPFS upload failed");
+      }
+    } else if (currentEpisodeForm.value.editingExistingOnChainEpisode) {
+        // If editing and markdown didn't change, use existing CID from the loaded on-chain data
+        const existingOcEpisode = fetchedOnChainEpisodes.value.find(ep => ep.publicKey.toString() === currentEpisodeForm.value.episodeOnChainPdaToEdit);
+        contentCidForOnChain = existingOcEpisode?.account?.contentCid || '';
     }
-    if (response.success) {
-      fetchEpisodesForTale();
-      closeEpisodeModal();
+
+    // Step 2: Create/Update ImageSet in Backend (sends current list of images)
+    showUiMessage("Syncing images with backend...", "info", 0);
+    const imageSetPayload = {
+        images: currentEpisodeForm.value.images.filter(img => img && img.trim() !== ''),
+        existingImageSetId: currentEpisodeForm.value.imageSetId, // Pass if editing existing image set
+        // Optional: If your backend uses these for context when creating/updating image set
+        // parentTaleOnChainPda: props.parentTale.onChainPdaString,
+        // taleMongoId: props.parentTale.mongoId 
+    };
+    // This backend endpoint should handle create (if existingImageSetId is null) or update
+    const imageSetResponse = await backendApiClient.post('/episodes/image-set', imageSetPayload);
+    if (!imageSetResponse.success || !imageSetResponse.imageSetId) {
+        throw new Error(imageSetResponse.message || "Failed to create/update image set in backend.");
     }
+    finalImageSetId = imageSetResponse.imageSetId; // This is the MongoDB _id to store on-chain
+    showUiMessage("Image set synced with backend.", "info", 1500);
+
+    // Step 3: Prepare On-Chain Data & Perform Transaction
+    const onChainMethodArgs = [ // For update_episode
+        currentEpisodeForm.value.episodeName,
+        contentCidForOnChain,
+        finalImageSetId, // Store the MongoDB _id of the image set
+        currentEpisodeForm.value.order,
+        currentEpisodeForm.value.status,
+        currentEpisodeForm.value.isNft,
+        currentEpisodeForm.value.isNft ? currentEpisodeForm.value.candyMachineId : "",
+    ];
+    let episodeOnChainPdaString;
+    let usedEpisodeIdSeed = currentEpisodeForm.value.onChainEpisodeIdSeed; // From form if editing
+
+    if (currentEpisodeForm.value.editingExistingOnChainEpisode && currentEpisodeForm.value.episodeOnChainPdaToEdit) {
+      showUiMessage("Updating on-chain episode...", "info", 0);
+      episodeOnChainPdaString = currentEpisodeForm.value.episodeOnChainPdaToEdit;
+      await program.methods.updateEpisode(...onChainMethodArgs)
+      .accounts({ episodeAccount: new PublicKey(episodeOnChainPdaString), author: wallet.publicKey.value })
+      .rpc();
+      showUiMessage("On-chain episode updated!", "info", 2000);
+    } else { // Creating new on-chain episode
+      usedEpisodeIdSeed = uuidv4().substring(0, MAX_ONCHAIN_EPISODE_ID_SEED_LENGTH);
+      showUiMessage("Creating on-chain episode...", "info", 0);
+      const [pda, _bump] = PublicKey.findProgramAddressSync(
+        [Buffer.from("episode"), new PublicKey(props.parentTale.onChainPdaString).toBuffer(), Buffer.from(usedEpisodeIdSeed)],
+        PROGRAM_ID
+      );
+      episodeOnChainPdaString = pda.toString();
+
+      // Prepend seed for create_episode
+      const createArgs = [usedEpisodeIdSeed, ...onChainMethodArgs];
+      await program.methods.createEpisode(...createArgs)
+      .accounts({
+        episodeAccount: episodeOnChainPdaString,
+        parentTaleAccount: new PublicKey(props.parentTale.onChainPdaString),
+        author: wallet.publicKey.value,
+        systemProgram: SystemProgram.programId,
+      }).rpc();
+      showUiMessage("On-chain episode created!", "info", 2000);
+    }
+
+    // Step 4. (Optional but good) Update backend EpisodeImageSet with on-chain PDA link
+    if (finalImageSetId && episodeOnChainPdaString) {
+        showUiMessage("Linking on-chain PDA to backend image set...", "info", 0);
+        try {
+            // Use the dedicated linking endpoint or ensure createOrUpdateImageSet can handle this
+            await backendApiClient.put(`/episodes/image-set/${finalImageSetId}/link-pda`, {
+                linkedEpisodeOnChainPda: episodeOnChainPdaString, // The PDA of the on-chain episode
+                parentTaleOnChainPda: props.parentTale.onChainPdaString, // For context
+                onChainEpisodeIdSeed: usedEpisodeIdSeed // For context
+            });
+            showUiMessage("Backend image set linked.", "info", 1500);
+        } catch (linkError) {
+            console.warn("Failed to link on-chain PDA to backend image set:", linkError);
+            showUiMessage("Could not finalize backend link for images. You might need to edit the episode again to establish the link if it's missing.", "warning");
+        }
+    }
+
+    showUiMessage("Episode saved successfully!", "success");
+    fetchAllEpisodeData();
+    closeEpisodeModal();
+  } catch (error) {
+    console.error('Error saving episode:', error);
+    let errorMsg = error.message || error.toString();
+    if (error.logs) errorMsg += ` Logs: ${error.logs.join(', ')}`;
+    showUiMessage(`Save episode error: ${errorMsg}`, "error");
   } finally {
     isSavingEpisode.value = false;
   }
 }
 
-async function confirmDeleteEpisode(episodeId) {
-  if (window.confirm("Delete this episode?")) {
-    try {
-      const response = await episodeApiClient.delete(`/episodes/${episodeId}`);
-      if (response.success) {
-        showUiMessage("Episode deleted.", "success");
-        fetchEpisodesForTale();
-      }
-    } catch (error) { /* Handled by interceptor */ }
-  }
+async function confirmDeleteCombinedEpisode(combinedEpisode) {
+    if (!program || !wallet.publicKey.value || !isAuthorOfParentTale.value) {
+        showUiMessage("Not authorized or program not ready.", "error"); return;
+    }
+    if (window.confirm(`Delete episode "${combinedEpisode.name}"? This will delete from on-chain and backend.`)) {
+        isSavingEpisode.value = true;
+        try {
+            const imageSetIdToDelete = combinedEpisode.imageSetId; // Get from on-chain data
+
+            if (combinedEpisode.onChainPda) {
+                showUiMessage("Deleting on-chain episode...", "info", 0);
+                await program.methods.deleteEpisode()
+                    .accounts({ episodeAccount: new PublicKey(combinedEpisode.onChainPda), author: wallet.publicKey.value })
+                    .rpc();
+                showUiMessage("On-chain episode deleted.", "info", 1500);
+            } else {
+                 showUiMessage("No on-chain PDA found for this episode. Skipping on-chain delete.", "warning");
+            }
+
+            if (imageSetIdToDelete) {
+                showUiMessage("Deleting backend image set...", "info", 0);
+                await backendApiClient.delete(`/episodes/image-set/${imageSetIdToDelete}`);
+                showUiMessage("Backend image set deleted.", "success");
+            } else {
+                 showUiMessage("No imageSetId found for this episode. Skipping backend image set delete.", "warning");
+            }
+            fetchAllEpisodeData();
+        } catch (error) {
+            console.error('Error deleting episode:', error);
+            showUiMessage(`Delete error: ${error.message || error.toString()}`, "error");
+        } finally { isSavingEpisode.value = false; }
+    }
 }
 
-watch(() => props.parentTale?._id, (newTaleId, oldTaleId) => {
-  if (newTaleId && newTaleId !== oldTaleId) {
-    episodes.value = [];
-    fetchEpisodesForTale();
+// --- Lifecycle Hooks and Watchers ---
+watch(() => props.parentTale?.onChainPdaString, (newParentPda) => {
+  if (newParentPda && program && props.parentTale.onChainAccountData) {
+    fetchAllEpisodeData();
+  } else if (!newParentPda) {
+    fetchedOnChainEpisodes.value = [];
+    backendImageLinks.value.clear();
   }
-}, { immediate: true });
+}, { immediate: true, deep: true }); // deep:true on parentTale might be too sensitive if onChainAccountData changes often without PdaString changing.
 
-watch(() => props.appUser?.id, (newUserId, oldUserId) => {
-    if (newUserId !== oldUserId && props.parentTale?._id) {
-        fetchEpisodesForTale();
+watch(() => props.appUser?.walletAddress, (newUserWalletAddr, oldUserWalletAddr) => {
+    if (newUserWalletAddr && newUserWalletAddr !== oldUserWalletAddr && program) {
+        fetchUserOnChainMintActivities();
+    } else if (!newUserWalletAddr) {
+        userOnChainMintActivities.value = [];
     }
-});
-watch(() => props.userMintActivities, () => {
-    console.log("User mint activities prop changed in EpisodeManager.");
-}, { deep: true });
+}, { immediate: true });
 
 
 onMounted(() => {
-  if (props.parentTale?._id) {
-    fetchEpisodesForTale();
-  } else {
-    console.warn("EpisodeManager: Parent Tale ID not provided on mount.");
-  }
+  if (typeof window !== 'undefined' && !window.Buffer) { window.Buffer = Buffer; }
+  // Initial data fetch is primarily handled by the watchers now.
 });
 
 </script>
+
+
 
 <style scoped>
 /* Main Container */
@@ -539,7 +749,6 @@ onMounted(() => {
   text-align: center;
   font-size: 0.875rem; /* text-sm */
 }
-/* Specific message types (info, success, error) would extend this */
 .ui-message-info {
   background-color: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe;
 }
@@ -576,7 +785,7 @@ onMounted(() => {
   padding: 1.5rem; /* p-6 */
   border-radius: 0.5rem; /* rounded-lg */
   box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05); /* shadow-xl */
-  max-width: 36rem; /* max-w-xl */
+  max-width: 42rem; /* max-w-2xl */
   width: 100%;
   max-height: 90vh;
   overflow-y: auto;
@@ -657,8 +866,6 @@ onMounted(() => {
 .dark .form-file-input {
   color: #9ca3af; /* dark:text-gray-400 */
 }
-/* Styling file input's button part is tricky and browser-dependent,
-   this provides a basic structure. Tailwind's `file:` variant is powerful. */
 .form-file-input::file-selector-button {
   margin-right: 1rem; /* file:mr-4 */
   padding: 0.5rem 1rem; /* file:py-2 file:px-4 */
@@ -888,15 +1095,15 @@ onMounted(() => {
   -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
-   line-height: 1.4; /* Approximate for line clamping */
+    line-height: 1.4; /* Approximate for line clamping */
 }
 .line-clamp-3 { /* If used for episode description */
-   -webkit-line-clamp: 3;
-   max-height: calc(1.4em * 3); /* line-height * number of lines */
+    -webkit-line-clamp: 3;
+    max-height: calc(1.4em * 3); /* line-height * number of lines */
 }
 .line-clamp-2 { /* If used for episode description */
-   -webkit-line-clamp: 2;
-   max-height: calc(1.4em * 2);
+    -webkit-line-clamp: 2;
+    max-height: calc(1.4em * 2);
 }
 .dark .episode-description {
   color: #9ca3af; /* dark:text-gray-400 */
@@ -951,6 +1158,14 @@ onMounted(() => {
 }
 .tag-status {
   /* Uses default .tag styles */
+}
+.tag-warning {
+    background-color: #fef3c7; /* bg-yellow-100 */
+    color: #92400e; /* text-yellow-700 */
+}
+.dark .tag-warning {
+    background-color: #b45309; /* dark:bg-yellow-700 */
+    color: #fde68a; /* dark:text-yellow-100 */
 }
 
 
@@ -1110,5 +1325,40 @@ onMounted(() => {
 
 .btn-sm { padding: 0.375rem 0.75rem; font-size: 0.75rem; }
 .btn-xs { padding: 0.25rem 0.625rem; font-size: 0.75rem; }
+
+/* Info Box */
+.info-box {
+  margin-top: 0.5rem; /* mt-2 */
+  padding: 0.75rem; /* p-3 */
+  background-color: #f9fafb; /* bg-gray-50 */
+  border-radius: 0.375rem; /* rounded-md */
+  border: 1px solid #e5e7eb; /* border-gray-200 */
+  font-size: 0.875rem; /* text-sm */
+  color: #374151; /* text-gray-700 */
+}
+.dark .info-box {
+  background-color: rgba(55, 65, 81, 0.5); /* dark:bg-gray-700/50 */
+  border-color: #4b5568; /* dark:border-gray-600 */
+  color: #e5e7eb; /* dark:text-gray-200 */
+}
+.error-box {
+  margin-top: 0.5rem; padding: 0.75rem; background-color: #fee2e2; color: #b91c1c; border-radius: 0.375rem; border: 1px solid #fecaca;
+}
+.dark .error-box { background-color: rgba(153, 27, 27, 0.3); color: #fca5a5; border-color: rgba(220, 38, 38, 0.5); }
+
+.link {
+  color: #4f46e5; /* text-indigo-600 */
+  text-decoration: underline;
+  font-weight: 500; /* font-medium */
+}
+.link:hover {
+  color: #4338ca; /* hover:text-indigo-500 */
+}
+.dark .link {
+  color: #818cf8; /* dark:text-indigo-400 */
+}
+.dark .link:hover {
+  color: #a78bfa; /* dark:hover:text-indigo-300 */
+}
 
 </style>

@@ -1,36 +1,43 @@
 // readium-fun/backend/routes/episodeRoutes.js
 const express = require('express');
 const {
-  createEpisode,       // POST /api/tales/:taleId/episodes
-  getEpisodesForTale,  // GET  /api/tales/:taleId/episodes
-  getEpisodeById,      // GET  /api/episodes/:episodeId  (Separate route for direct access)
-  updateEpisode,       // PUT  /api/episodes/:episodeId
-  deleteEpisode,       // DELETE /api/episodes/:episodeId
+  createImageSet,
+  deleteImageSet,
+  getImageSetById,
+  updateImageSet
 } = require('../controllers/episodeController');
 
 const { protect, authorize } = require('../middleware/authMiddleware');
 
-// Option 1: Merge with taleRoutes if you want /api/tales/:taleId/episodes/:episodeId for update/delete
-// For this example, we'll use a separate router for /api/episodes/ for individual episode ops,
-// and keep creation/listing under /api/tales/:taleId/episodes
+// Router for routes nested under /api/tales/:taleMongoId/
+// This will now primarily be for listing backend image set records associated with a Tale
+const taleNestedEpisodeRouter = express.Router({ mergeParams: true });
 
-const router = express.Router({ mergeParams: true }); // mergeParams allows access to :taleId from parent router
+// GET /api/tales/:taleMongoId/episodes/image-sets - Get all backend image set links for a tale
+// Note the path change to avoid conflict if you have other /episodes routes under tales
+// taleNestedEpisodeRouter.route('/image-sets')
+//   .get(protect, getImageSetsForTale); // Protect if it shows sensitive links or for admin only
 
-// Routes that are nested under a specific Tale
-// e.g., POST /api/tales/:taleId/episodes
-// e.g., GET  /api/tales/:taleId/episodes
-router.route('/')
-  .post(protect, authorize('creator'), createEpisode) // Create an episode for a tale
-  .get(protect,getEpisodesForTale);                           // Get all episodes for a tale
 
-// Routes for specific episodes (not nested under /tales/:taleId/)
-// These will be mounted at /api/episodes
+// Router for individual episode image set operations, typically mounted at /api/episodes
 const individualEpisodeRouter = express.Router();
-individualEpisodeRouter.route('/:episodeId')
-    .get(getEpisodeById)
-    .put(protect, authorize('creator'), updateEpisode)
-    .delete(protect, authorize('creator'), deleteEpisode);
 
-// Export both routers. The main router for nested routes,
-// and individualEpisodeRouter to be mounted separately at /api/episodes
-module.exports = { taleNestedEpisodeRouter: router, individualEpisodeRouter };
+// POST /api/episodes/image-set - Create or Update an image set.
+// Client sends images. If existingImageSetId is provided in body, it's an update.
+// Returns the MongoDB _id of the image set (imageSetId).
+individualEpisodeRouter.post('/image-set', protect, authorize('creator'), createImageSet);
+
+// GET /api/episodes/image-set/:imageSetId - Get an image set by its MongoDB _id
+// This :imageSetId is the ID that was stored on-chain.
+individualEpisodeRouter.get('/image-set/:imageSetId', getImageSetById);
+
+// DELETE /api/episodes/image-set/:imageSetId - Delete an image set by its MongoDB _id
+individualEpisodeRouter.delete('/image-set/:imageSetId', protect, authorize('creator'), deleteImageSet);
+
+// Optional: Endpoint to link an existing EpisodeImageSet to an on-chain episode's PDA
+// This could be a PUT request to /api/episodes/image-set/:imageSetId/link-onchain
+// individualEpisodeRouter.put('/image-set/:imageSetId/link-onchain', protect, authorize('creator'), linkImageSetToOnChainEpisode);
+// The controller for this would update the episodeOnChainPda, parentTaleOnChainPda, onChainEpisodeIdSeed fields.
+// For simplicity, the current createOrUpdateImageSet can handle this if these fields are sent in the body.
+
+module.exports = { taleNestedEpisodeRouter, individualEpisodeRouter };

@@ -5,48 +5,55 @@
       {{ viewUiMessage.text }}
     </div>
 
-    <div v-if="isLoadingTale || isLoadingAppUser || isLoadingUserMints" class="loading-container">
+    <div v-if="isLoadingInitialData" class="loading-container">
       <div class="spinner"></div>
-      <p class="loading-text">
-        <span v-if="isLoadingTale">Loading tale details...</span>
-        <span v-else-if="isLoadingAppUser">Loading user information...</span>
-        <span v-else-if="isLoadingUserMints">Loading your mint activities...</span>
-      </p>
+      <p class="loading-text">Loading tale details...</p>
     </div>
-    <div v-else-if="!tale" class="error-container">
-      Tale not found or an error occurred while fetching details.
+    <div v-else-if="!taleOnChainAccountData && !isLoadingInitialData" class="error-container">
+      Tale not found or an error occurred. The on-chain ID might be incorrect or the tale does not exist.
       <button @click="goBack" class="btn btn-secondary btn-back">Go Back</button>
     </div>
-    <div v-else class="tale-content-wrapper">
+    <div v-else-if="taleOnChainAccountData && taleBackendDoc" class="tale-content-wrapper">
       <section class="tale-details-section">
         <button @click="goBack" class="btn btn-secondary btn-back-tales">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="back-arrow-icon">
             <path fill-rule="evenodd" d="M17 10a.75.75 0 0 1-.75.75H5.612l4.158 3.96a.75.75 0 1 1-1.04 1.08l-5.5-5.25a.75.75 0 0 1 0-1.08l5.5-5.25a.75.75 0 1 1 1.04 1.08L5.612 9.25H16.25A.75.75 0 0 1 17 10Z" clip-rule="evenodd" />
           </svg>
-          Back to Tales List
+          Back
         </button>
-        <h1 class="tale-main-title">{{ tale.title }}</h1>
-        <img v-if="tale.coverImage" :src="tale.coverImage" @error="setDefaultImage" alt="Tale Cover" class="tale-cover-image-large"/>
+        <h1 class="tale-main-title">{{ taleOnChainAccountData.title }}</h1>
+        <img v-if="taleOnChainAccountData.coverImageCid" :src="`https://gateway.pinata.cloud/ipfs/${taleOnChainAccountData.coverImageCid}`" @error="setDefaultImage" alt="Tale Cover" class="tale-cover-image-large"/>
         <div class="tale-meta-info">
-          <span class="meta-item">By: {{ tale.author?.name || shortenAddress(tale.authorWalletAddress) }}</span>
-          <span class="meta-item">Genre: {{ tale.genre || 'N/A' }}</span>
-          <span class="meta-item">Status: <span :class="['status-badge', `status-${tale.status}`]">{{ tale.status }}</span></span>
+          <span class="meta-item">Author: {{ shortenAddress(taleOnChainAccountData.author.toString()) }}</span>
+          <span class="meta-item">Genre: {{ taleOnChainAccountData.genre || 'N/A' }}</span>
+          <span class="meta-item">Status: <span :class="['status-badge', `status-${getStatusString(taleOnChainAccountData.status).toLowerCase()}`]">{{ getStatusString(taleOnChainAccountData.status) }}</span></span>
         </div>
-        <div class="prose-styles tale-prose-content" v-html="renderMarkdown(tale.content)"></div>
-        <div v-if="tale.tags && tale.tags.length > 0" class="tags-container">
-            <span v-for="tagItem in tale.tags" :key="tagItem" class="tag">{{ tagItem }}</span>
+        <div class="prose-styles tale-prose-content" v-html="renderMarkdown(fetchedIpfsFullContent)"></div>
+        <div v-if="taleBackendDoc.tags && taleBackendDoc.tags.length > 0" class="tags-container">
+            <span v-for="tagItem in taleBackendDoc.tags" :key="tagItem" class="tag">{{ tagItem }}</span>
+        </div>
+         <div v-else-if="!taleBackendDoc" class="info-box">
+            <p>Backend details (like tags) for this tale are not yet synced or available.</p>
         </div>
       </section>
 
       <hr class="section-divider"/>
 
       <EpisodeManager
-        :parentTale="tale"
+        v-if="taleBackendDoc && taleOnChainPdaString && taleOnChainAccountData"
+        :parentTale="{
+            mongoId: taleBackendDoc._id,
+            onChainPdaString: taleOnChainPdaString,
+            onChainAccountData: taleOnChainAccountData
+        }"
         :appUser="appUser"
         :userMintActivities="userMintActivities"
       />
-       <div v-if="!appUser && !isLoadingAppUser && tale" class="login-prompt-box">
-          Public episodes are shown. <router-link :to="{name: 'Auth'}" class="link">Login or Register</router-link> to manage episodes if you are the author or to view token-gated content.
+       <div v-else-if="taleOnChainAccountData && !taleBackendDoc && !isLoadingInitialData" class="info-box">
+            Waiting for backend details to load Episode Manager...
+      </div>
+       <div v-if="!appUser && !isLoadingAppUser && taleOnChainAccountData" class="login-prompt-box">
+        Public episodes are shown. <router-link :to="{name: 'Auth'}" class="link">Login or Register</router-link> to manage episodes if you are the author or to view token-gated content.
       </div>
     </div>
   </div>
@@ -57,50 +64,87 @@ import { ref, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
 import { marked } from 'marked';
-import EpisodeManager from '../components/EpisodeManager.vue'; // Ensure this path is correct
-import { useWallet } from 'solana-wallets-vue'; // To check wallet connection for user fetching
+import { useWallet } from 'solana-wallets-vue';
+import { Connection, PublicKey } from '@solana/web3.js';
+import { Program, AnchorProvider } from '@coral-xyz/anchor';
+import { Buffer } from 'buffer';
 
-// Configuration
+import EpisodeManager from '../components/EpisodeManager.vue';
+
+// --- Configuration ---
 const TALES_API_BASE_URL = import.meta.env.VITE_APP_AUTH_API_URL || 'http://localhost:3000/api';
-const AUTH_API_BASE_URL = TALES_API_BASE_URL; // Assuming same base for auth
-const MINT_ACTIVITIES_API_BASE_URL = TALES_API_BASE_URL; // Assuming same base
+const AUTH_API_BASE_URL = TALES_API_BASE_URL;
 const JWT_TOKEN_KEY = 'readium_fun_jwt_token';
+const SOLANA_RPC_URL = import.meta.env.VITE_RPC_ENDPOINT || 'https://api.devnet.solana.com';
+
+import idlFromFile from '../../../target/idl/readium_fun.json';
+const PROGRAM_ID = new PublicKey("EynuKneQ6RX5AAUY8E6Lq6WvNrUVY2F3C8TcFNB7MYh8");
+const idl = idlFromFile;
+
+// --- Wallet and Program ---
+const wallet = useWallet();
+const connection = new Connection(SOLANA_RPC_URL, "confirmed");
+let provider;
+let program;
+
+// --- Reactive State ---
+const taleOnChainAccountData = ref(null);
+const taleOnChainPdaString = ref('');
+const taleBackendDoc = ref(null); // Stores the MongoDB document for the tale
+const isLoadingInitialData = ref(true);
+
+const appUser = ref(null);
+const isLoadingAppUser = ref(false);
+const userMintActivities = ref([]); // Assuming this is fetched in fetchAppUser
+// const isLoadingUserMints = ref(false); // If fetched separately
+
+const fetchedIpfsFullContent = ref('');
+const ipfsFullContentLoading = ref(false);
+const ipfsFullContentError = ref('');
+const viewUiMessage = ref({ text: '', type: 'info' });
 
 const route = useRoute();
 const router = useRouter();
-const wallet = useWallet(); // Get wallet status from solana-wallets-vue
 
-// Reactive State
-const tale = ref(null);
-const isLoadingTale = ref(false);
-const appUser = ref(null);
-const isLoadingAppUser = ref(false);
-const userMintActivities = ref([]);
-const isLoadingUserMints = ref(false);
+// --- Watcher for wallet connection ---
+watch(() => wallet.connected.value, (isConnected) => {
+  if (isConnected && wallet.publicKey.value) {
+    if (!program || provider?.wallet?.publicKey?.toBase58() !== wallet.publicKey.value.toBase58()) {
+        if (wallet.wallet.value && wallet.wallet.value.adapter) {
+             provider = new AnchorProvider(connection, wallet.wallet.value.adapter, AnchorProvider.defaultOptions());
+             try {
+                program = new Program(idl, provider);
+                console.log("TaleDetailView: Anchor Program Initialized.");
+             } catch (e) {
+                console.error("TaleDetailView: Error initializing Anchor Program:", e);
+                showViewUiMessage(`Failed to initialize on-chain program: ${e.message}`, "error");
+                program = null; provider = null; return;
+             }
+        } else {
+            console.error("TaleDetailView: Wallet adapter not available.");
+            program = null; provider = null; return;
+        }
+    }
+    if (program && route.params.id) { // route.params.id is the onChainTaleIdSeed
+        loadAllTaleData(route.params.id);
+    }
+  } else {
+    program = null; provider = null;
+    taleOnChainAccountData.value = null; taleBackendDoc.value = null; fetchedIpfsFullContent.value = '';
+  }
+}, { immediate: true });
 
-// UI Message for this view
-const viewUiMessage = ref({ text: '', type: 'info' });
+// --- Utility Functions ---
 function showViewUiMessage(msg, type = 'info', duration = 5000) {
   viewUiMessage.value = { text: msg, type };
-  if (duration > 0) {
-    setTimeout(() => { viewUiMessage.value = { text: '', type: 'info' }; }, duration);
-  }
+  if (duration > 0) setTimeout(() => { viewUiMessage.value = { text: '', type: 'info' }; }, duration);
 }
+const shortenAddress = (address, chars = 6) => address ? `${address.slice(0, chars)}...${address.slice(-chars)}` : '';
+const setDefaultImage = (event) => { event.target.src = 'https://placehold.co/600x400/gray/white?text=Error'; };
+const renderMarkdown = (markdownText) => markdownText ? marked(markdownText) : '';
+const getStatusString = (statusNum) => (['Draft', 'Published', 'Archived'][statusNum] || 'Unknown');
 
-// Utility Functions
-const shortenAddress = (address, chars = 6) => {
-    if (!address) return '';
-    return `${address.slice(0, chars)}...${address.slice(-chars)}`;
-};
-const setDefaultImage = (event) => {
-    event.target.src = 'https://placehold.co/600x400/gray/white?text=Image+Load+Error';
-};
-const renderMarkdown = (markdownText) => {
-    if (!markdownText) return '';
-    return marked(markdownText);
-};
-
-// API Client Setup
+// --- API Client ---
 const apiClient = axios.create({ baseURL: TALES_API_BASE_URL });
 apiClient.interceptors.request.use(config => {
   const token = localStorage.getItem(JWT_TOKEN_KEY);
@@ -108,135 +152,167 @@ apiClient.interceptors.request.use(config => {
   return config;
 });
 apiClient.interceptors.response.use(
-    response => response.data, // Return data directly for success
-    error => {
-        const msg = error.response?.data?.message || error.message || 'An API error occurred in TaleDetailView.';
-        console.error('API Error (TaleDetailView Interceptor):', msg, error.response || error);
-        showViewUiMessage(msg, 'error'); // Use view-specific UI message
-        return Promise.reject(error.response?.data || { message: msg, error });
-    }
+  response => response.data,
+  error => {
+    const msg = error.response?.data?.message || error.message || 'An API error occurred.';
+    showViewUiMessage(msg, 'error'); // Use view-specific UI message
+    return Promise.reject(error.response?.data || { message: msg, error });
+  }
 );
 
-// Data Fetching Functions
-async function fetchTale(id) {
-  if (!id) {
-    tale.value = null;
-    showViewUiMessage("No Tale ID provided.", "error");
-    return;
-  }
-  isLoadingTale.value = true;
-  try {
-    const response = await apiClient.get(`/tales/${id}`);
-    if (response.success) {
-      tale.value = response.data;
-    } else {
-      tale.value = null;
-      showViewUiMessage(response.message || `Tale with ID ${id} not found.`, 'error');
-    }
-  } catch (error) {
-    // Error is handled by the interceptor, but we ensure tale is null
-    tale.value = null;
-  } finally {
-    isLoadingTale.value = false;
-  }
-}
-
+// --- Data Fetching ---
 async function fetchAppUser() {
   const token = localStorage.getItem(JWT_TOKEN_KEY);
-  if (!token || !wallet.connected.value) { // Only attempt if token exists and wallet is connected
-    appUser.value = null;
-    userMintActivities.value = []; // Clear mints if no user/wallet
-    return;
-  }
+  if (!token || !wallet.connected.value) { appUser.value = null; userMintActivities.value = []; return; }
   isLoadingAppUser.value = true;
   try {
-    const authApiClient = axios.create({ baseURL: AUTH_API_BASE_URL }); // Separate instance for clarity if needed
-    const response = await authApiClient.get('/auth/me', {
-        headers: { 'Authorization': `Bearer ${token}` }
-    });
-    if (response.data.success) {
-        appUser.value = response.data.data;
-        // After successfully fetching user, fetch their mint activities
-        if (appUser.value?.walletAddress) {
-            await fetchUserMintActivities(appUser.value.walletAddress);
-        } else {
-            userMintActivities.value = []; // Clear if no wallet address on user
-        }
+    const response = await apiClient.get('/auth/me'); // Assuming apiClient is for AUTH_API_BASE_URL
+    if (response.success) { // Check if backend response has a success flag
+      appUser.value = response.data;
+      if (appUser.value?.walletAddress) await fetchUserMintActivities(appUser.value.walletAddress);
     } else {
-        appUser.value = null;
-        userMintActivities.value = [];
-        localStorage.removeItem(JWT_TOKEN_KEY); // Token might be invalid
+      appUser.value = null; userMintActivities.value = []; localStorage.removeItem(JWT_TOKEN_KEY);
     }
   } catch (error) {
-    console.error("Failed to fetch app user in TaleDetailView:", error);
-    appUser.value = null;
-    userMintActivities.value = [];
-    // Don't remove token here if it's just a network error, Auth.vue handles invalid tokens better
+    console.error("TaleDetailView: Failed to fetch app user:", error);
+    appUser.value = null; userMintActivities.value = [];
   } finally {
     isLoadingAppUser.value = false;
   }
 }
 
 async function fetchUserMintActivities(walletAddress) {
-    if (!walletAddress) {
-        userMintActivities.value = [];
-        return;
-    }
-    isLoadingUserMints.value = true;
-    try {
-        // Use the main apiClient as it's already configured with auth interceptor
-        const response = await apiClient.get(`/mint-activities/by-user/${walletAddress}`);
-        if (response.success) {
-            userMintActivities.value = response.data;
+  if (!walletAddress) { userMintActivities.value = []; return; }
+  // isLoadingUserMints.value = true; // If you have a separate loader for this
+  try {
+    const response = await apiClient.get(`/mint-activities/by-user/${walletAddress}`);
+    userMintActivities.value = response.success ? response.data : [];
+  } catch (error) {
+    userMintActivities.value = [];
+  } finally {
+    // isLoadingUserMints.value = false;
+  }
+}
+
+async function loadAllTaleData(onChainTaleIdSeedFromRoute) {
+  if (!program) {
+    showViewUiMessage("On-chain program not ready. Connect wallet.", "warning");
+    isLoadingInitialData.value = false;
+    return;
+  }
+  if (!onChainTaleIdSeedFromRoute) {
+    showViewUiMessage("No Tale ID in route.", "error");
+    isLoadingInitialData.value = false;
+    return;
+  }
+
+  isLoadingInitialData.value = true;
+  taleOnChainAccountData.value = null;
+  taleBackendDoc.value = null;
+  fetchedIpfsFullContent.value = '';
+  ipfsFullContentError.value = '';
+  taleOnChainPdaString.value = '';
+
+  try {
+    // 1. Fetch On-Chain Data
+    const [pda, _bump] = PublicKey.findProgramAddressSync(
+      [Buffer.from("tale"), Buffer.from(onChainTaleIdSeedFromRoute)], PROGRAM_ID
+    );
+    taleOnChainPdaString.value = pda.toString(); // Store the PDA string
+    console.log(`Fetching on-chain tale data for PDA: ${taleOnChainPdaString.value}`);
+    const fetchedTale = await program.account.tale.fetch(pda);
+    taleOnChainAccountData.value = fetchedTale;
+    console.log("Fetched on-chain tale:", taleOnChainAccountData.value);
+
+    // 2. Fetch Backend Document using onChainTaleIdSeed
+    if (taleOnChainAccountData.value) { // Ensure on-chain data was fetched
+      try {
+        console.log(`Fetching backend tale doc for seed: ${onChainTaleIdSeedFromRoute}`);
+        const backendResponse = await apiClient.get(`/tales/by-seed/${onChainTaleIdSeedFromRoute}`);
+        if (backendResponse.success) {
+          taleBackendDoc.value = backendResponse.data;
+          console.log("Fetched backend tale doc:", taleBackendDoc.value);
         } else {
-            userMintActivities.value = [];
-            showViewUiMessage(response.message || 'Could not fetch mint activities.', 'warning');
+          // This is not necessarily a critical error if the backend link doesn't exist yet,
+          // but it means tags and backend-managed images won't be available.
+          console.warn(backendResponse.message || "Backend tale document not found for this on-chain tale.");
+          showViewUiMessage("Backend details for this tale are not yet synced.", "info", 3000);
+          // Initialize taleBackendDoc to an empty object or specific structure if needed by template
+          taleBackendDoc.value = { _id: null, tags: [] }; // Provide a default structure
         }
-    } catch (error) {
-        console.error("Failed to fetch user mint activities:", error);
-        userMintActivities.value = [];
-        // Error message shown by interceptor
-    } finally {
-        isLoadingUserMints.value = false;
+      } catch (backendError) {
+        console.error("Error fetching backend tale doc:", backendError);
+        showViewUiMessage(`Could not load backend details: ${backendError.message || 'Unknown error'}`, "warning");
+        taleBackendDoc.value = { _id: null, tags: [] }; // Default on error
+      }
     }
+
+    // 3. Fetch IPFS Content
+    if (taleOnChainAccountData.value?.contentCid) {
+      ipfsFullContentLoading.value = true;
+      try {
+        const ipfsResponse = await axios.get(`https://gateway.pinata.cloud/ipfs/${taleOnChainAccountData.value.contentCid}`);
+        fetchedIpfsFullContent.value = typeof ipfsResponse.data === 'string' ? ipfsResponse.data : JSON.stringify(ipfsResponse.data, null, 2);
+      } catch (ipfsError) {
+        console.error("Error fetching full content from IPFS:", ipfsError);
+        ipfsFullContentError.value = "Could not load full tale content from IPFS.";
+        fetchedIpfsFullContent.value = "Content not available.";
+      } finally {
+        ipfsFullContentLoading.value = false;
+      }
+    } else {
+      fetchedIpfsFullContent.value = "No content CID found for this tale.";
+    }
+    if(taleOnChainAccountData.value) showViewUiMessage("Tale details loaded.", "success", 2000);
+
+  } catch (error) {
+    console.error(`Error loading all tale data for ID ${onChainTaleIdSeedFromRoute}:`, error);
+    taleOnChainAccountData.value = null;
+    taleBackendDoc.value = null;
+    fetchedIpfsFullContent.value = '';
+    showViewUiMessage(`Failed to load tale: ${error.message}`, "error");
+  } finally {
+    isLoadingInitialData.value = false;
+  }
 }
 
 function goBack() {
-    // Prefers going back in history, otherwise to Home.
-    if (window.history.length > 2) { // Check if there's a page to go back to
-        router.go(-1);
-    } else {
-        router.push({ name: 'Home' });
-    }
+  if (window.history.length > 2) {
+    router.go(-1);
+  } else {
+    router.push({ name: 'Home' });
+  }
 }
 
-// Lifecycle Hooks and Watchers
+// --- Lifecycle Hooks and Watchers ---
 onMounted(async () => {
-  await fetchAppUser(); // Fetch user and their mints first
-  if (route.params.id) {
-    await fetchTale(route.params.id);
+  if (typeof window !== 'undefined' && !window.Buffer) { window.Buffer = Buffer; }
+  await fetchAppUser();
+  // Initial tale data load is triggered by the wallet watcher if wallet is already connected,
+  // or by the route param watcher if program is already initialized.
+  if (program && route.params.id) {
+      loadAllTaleData(route.params.id);
+  } else if (!program && wallet.connected.value && route.params.id) {
+      console.log("TaleDetailView: Wallet connected on mount, program init pending via watcher.");
   }
 });
 
 watch(() => route.params.id, async (newId, oldId) => {
-    if (newId && newId !== oldId) { // Fetch only if ID actually changes
-        await fetchTale(newId);
+    if (newId && newId !== oldId && program) { // Fetch only if ID changes AND program is ready
+        await loadAllTaleData(newId);
+    }
+}, { immediate: false }); // Don't run immediately, onMounted and wallet watcher handle initial
+
+watch(() => wallet.publicKey.value, (newPk, oldPk) => {
+    if (newPk?.toBase58() !== oldPk?.toBase58()) {
+        fetchAppUser(); // Re-fetch user if wallet pk changes
     }
 });
-
-// Watch for wallet connection changes to re-fetch user and their mints
-watch(() => wallet.connected.value, async (isConnected) => {
-    await fetchAppUser(); // This will also trigger fetchUserMintActivities if user is found
-    if (!isConnected) { // If wallet disconnects
-        appUser.value = null;
-        userMintActivities.value = [];
-    }
-}, { immediate: false }); // 'immediate: true' might cause issues if wallet initializes after component mount.
-                          // fetchAppUser in onMounted handles initial load.
 
 </script>
 
 <style scoped>
+/* Styles are largely similar to the previous TaleDetailView, with minor adjustments */
 .tale-detail-view-container {
   padding: 1rem; /* p-4 */
   background-color: #f9fafb; /* bg-gray-50 */
@@ -299,8 +375,8 @@ watch(() => wallet.connected.value, async (isConnected) => {
   margin-left: auto;
   margin-right: auto;
   padding: 1rem;
-  background-color: #fff1f2; /* A bit softer red for error box background */
-  color: #991b1b; /* A bit softer red for error text */
+  background-color: #fff1f2;
+  color: #991b1b;
   border: 1px solid #fecdd3;
   border-radius: 0.375rem;
 }
@@ -389,19 +465,35 @@ watch(() => wallet.connected.value, async (isConnected) => {
 }
 .status-badge {
   font-weight: 600; /* font-semibold */
+  padding: 0.125rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
 }
 .status-published {
-  color: #059669; /* text-green-600 */
+  background-color: #def7ec; /* bg-green-100 */
+  color: #057a55; /* text-green-700 */
 }
 .dark .status-published {
-  color: #34d399; /* dark:text-green-400 */
+  background-color: #059669; /* dark:bg-green-700 */
+  color: #a7f3d0; /* dark:text-green-100 */
 }
 .status-draft {
-  color: #d97706; /* text-yellow-600 */
+  background-color: #fef3c7; /* bg-yellow-100 */
+  color: #92400e; /* text-yellow-700 */
 }
 .dark .status-draft {
-  color: #f59e0b; /* dark:text-yellow-400 */
+  background-color: #b45309; /* dark:bg-yellow-700 */
+  color: #fde68a; /* dark:text-yellow-100 */
 }
+.status-archived {
+  background-color: #e5e7eb; /* bg-gray-200 */
+  color: #4b5563; /* text-gray-700 */
+}
+.dark .status-archived {
+  background-color: #4b5568; /* dark:bg-gray-600 */
+  color: #e5e7eb; /* dark:text-gray-200 */
+}
+
 
 .tale-prose-content {
   max-width: none; /* max-w-none */
@@ -576,4 +668,9 @@ watch(() => wallet.connected.value, async (isConnected) => {
 .prose-styles :deep(pre) :deep(code) { /* Code within pre blocks */
   background-color: transparent; padding: 0; border-radius: 0;
 }
+.error-box {
+  margin-top: 0.5rem; padding: 0.75rem; background-color: #fee2e2; color: #b91c1c; border-radius: 0.375rem; border: 1px solid #fecaca;
+}
+.dark .error-box { background-color: rgba(153, 27, 27, 0.3); color: #fca5a5; border-color: rgba(220, 38, 38, 0.5); }
+
 </style>

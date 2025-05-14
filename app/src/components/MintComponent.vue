@@ -2,24 +2,20 @@
   <div class="mint-component-container">
     <h1 class="mint-page-title">Mint Your NFT</h1>
 
-    <!-- <div class="wallet-status-section">
-      <h2 class="section-heading">Wallet Status</h2>
-      <WalletMultiButton />
-      <div v-if="wallet.connected.value && wallet.publicKey.value" class="info-box wallet-connected-info">
-        Connected: <span class="wallet-address-display">{{ shortenAddress(wallet.publicKey.value.toBase58()) }}</span>
-      </div>
-      <div v-else class="warning-box wallet-disconnected-info">
-        Please connect your wallet to mint.
-      </div>
-    </div> -->
+    <div v-if="!wallet.connected.value" class="wallet-prompt-section">
+        <p class="info-text">Please connect your wallet to mint or view Candy Machine details.</p>
+        <div class="wallet-button-wrapper">
+            <WalletMultiButton />
+        </div>
+    </div>
 
     <div v-if="isLoadingInitialData && props.candyMachineAddress" class="loading-indicator-container">
         <div class="spinner"></div>
         <p class="loading-text">Loading Candy Machine details for <span class="cm-address-display">{{ shortenAddress(props.candyMachineAddress, 8) }}</span>...</p>
     </div>
-    <div v-else-if="initialLoadingError" class="error-box initial-load-error">
+    <div v-else-if="initialLoadingError && props.candyMachineAddress" class="error-box initial-load-error">
         <p>Failed to load Candy Machine: {{ initialLoadingError }}</p>
-        <p class="error-subtext">Ensure the CM ID ({{ props.candyMachineAddress || 'Not Provided' }}) is correct.</p>
+        <p class="error-subtext">Ensure the CM ID ({{ props.candyMachineAddress || 'Not Provided' }}) is correct and your wallet is connected to the correct network ({{ SOLANA_NETWORK }}).</p>
     </div>
     <div v-else-if="wallet.connected.value && candyMachine" class="mint-section-active">
       <div class="cm-details-box">
@@ -36,28 +32,33 @@
         <p v-if="candyMachineDetails.endDate !== 'Not set'" class="cm-date-info">
           End Date: {{ candyMachineDetails.endDate }}
         </p>
+        <p v-if="props.episodeOnChainPda" class="cm-detail-item info-text-sm">
+            Minting for Episode: <span class="cm-detail-value episode-link-display">{{ shortenAddress(props.episodeOnChainPda, 6) }}</span>
+        </p>
       </div>
 
       <div class="mint-button-container">
         <button
           @click="handleMintNFT"
-          :disabled="isMinting || !candyMachine || candyMachineDetails.itemsRemaining === 0 || !wallet.connected.value"
+          :disabled="isMinting || !candyMachine || candyMachineDetails.itemsRemaining === 0 || !wallet.connected.value || !anchorProgram"
           class="btn btn-primary btn-mint"
         >
           <span v-if="isMinting" class="mint-button-inner-text">
             <span class="spinner-inline"></span> Minting...
           </span>
           <span v-else-if="candyMachineDetails.itemsRemaining === 0" class="mint-button-inner-text">Sold Out</span>
+           <span v-else-if="!anchorProgram && wallet.connected.value" class="mint-button-inner-text">Initializing Program...</span>
           <span v-else class="mint-button-inner-text">Mint NFT</span>
         </button>
       </div>
     </div>
     <div v-else-if="wallet.connected.value && !candyMachine && !isLoadingInitialData && props.candyMachineAddress" class="info-box cm-load-failed-info">
-        Could not load Candy Machine with ID: <span class="cm-address-display">{{ props.candyMachineAddress }}</span>.
+        Could not load Candy Machine with ID: <span class="cm-address-display">{{ props.candyMachineAddress }}</span>. Please check the ID and network.
     </div>
-    <div v-else-if="!props.candyMachineAddress && wallet.connected.value" class="warning-box no-cm-id-info">
-      No Candy Machine ID has been specified for minting. This component might be accessed via a general '/mint' route.
+    <div v-else-if="wallet.connected.value && !props.candyMachineAddress" class="warning-box no-cm-id-info">
+      No Candy Machine ID has been specified for minting.
     </div>
+
 
     <div v-if="uiMessage.text"
          :class="['ui-message-display', uiMessage.type === 'error' ? 'error-box' : (uiMessage.type === 'success' ? 'success-box' : 'info-box')]">
@@ -65,7 +66,12 @@
       <p v-html="uiMessage.text"></p>
       <div v-if="uiMessage.type === 'success' && mintResult?.signature" class="tx-link-container">
         <a :href="`https://explorer.solana.com/tx/${mintResult.signature}?cluster=${SOLANA_NETWORK}`" target="_blank" class="link transaction-link">
-          View Transaction on Explorer
+          View Mint Transaction
+        </a>
+      </div>
+       <div v-if="uiMessage.type === 'success' && mintResult?.activityLogSignature" class="tx-link-container">
+        <a :href="`https://explorer.solana.com/tx/${mintResult.activityLogSignature}?cluster=${SOLANA_NETWORK}`" target="_blank" class="link transaction-link">
+          View Activity Log Transaction
         </a>
       </div>
     </div>
@@ -76,6 +82,8 @@
 <script setup>
 import { ref, onMounted, watch, defineProps } from 'vue';
 import { useWallet, WalletMultiButton } from 'solana-wallets-vue';
+import { Connection, PublicKey, SystemProgram } from '@solana/web3.js';
+import { Program, AnchorProvider, web3 } from '@coral-xyz/anchor';
 import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
 import { walletAdapterIdentity } from '@metaplex-foundation/umi-signer-wallet-adapters';
 import {
@@ -86,65 +94,55 @@ import {
 } from '@metaplex-foundation/mpl-candy-machine';
 import { fetchDigitalAsset } from '@metaplex-foundation/mpl-token-metadata';
 import {
-  publicKey,
-  generateSigner,
-  transactionBuilder,
-  some,
-  sol,
+  publicKey as umiPublicKeyUtil,
+  generateSigner as umiGenerateSigner,
+  transactionBuilder as umiTransactionBuilder,
+  some as umiSome,
+  sol as umiSol,
+  // Option, // For UMI's Option type
 } from '@metaplex-foundation/umi';
 import { setComputeUnitLimit } from '@metaplex-foundation/mpl-toolbox';
 import { base58 } from '@metaplex-foundation/umi/serializers';
-import axios from 'axios';
-// Removed import for initWalletService as we are standardizing on useWallet
-import { initWallet as initWalletService } from '../services/walletService';
+// No axios needed if not logging to a separate backend
+
+// Import your program's IDL and Program ID
+// **CRITICAL**: Adjust this path to your actual IDL file generated by `anchor build`
+import idlFromFile from '../../../target/idl/readium_fun.json';
+const READIUM_FUN_PROGRAM_ID = new PublicKey("EynuKneQ6RX5AAUY8E6Lq6WvNrUVY2F3C8TcFNB7MYh8"); // Your Program ID from IDL
+const idl = idlFromFile;
+
 
 const props = defineProps({
   candyMachineAddress: {
     type: String,
     default: null,
   },
+  episodeOnChainPda: { // Optional: String PDA of the on-chain Episode this mint is for
+    type: String,
+    default: null,
+  }
 });
 
 const RPC_ENDPOINT = import.meta.env.VITE_RPC_ENDPOINT || 'https://api.devnet.solana.com';
 const SOLANA_NETWORK = RPC_ENDPOINT.includes('mainnet') ? 'mainnet-beta' : (RPC_ENDPOINT.includes('testnet') ? 'testnet' : 'devnet');
-const API_BASE_URL = import.meta.env.VITE_APP_AUTH_API_URL || 'http://localhost:3000/api';
-const JWT_TOKEN_KEY = 'readium_fun_jwt_token';
-// const {umi } = initWalletService()
-const wallet = useWallet(); // Use the global wallet adapter from solana-wallets-vue
-let umi = null; // This will be the primary UMI instance
-console.log(wallet.wallet.value.adapter,"wallleeett")
+
+const wallet = useWallet();
+let umi = null; // Umi instance for Metaplex
+let anchorProvider = null; // Anchor provider
+let anchorProgram = null;  // Anchor program instance for your custom program
+
 const isLoadingInitialData = ref(false);
 const initialLoadingError = ref('');
 const candyMachine = ref(null);
 const candyGuard = ref(null);
 const collectionNft = ref(null);
 const candyMachineDetails = ref({
-  name: 'Loading...',
-  price: 0,
-  itemsAvailable: 0,
-  itemsMinted: 0,
-  itemsRemaining: 0,
-  goLiveDate: 'Not set',
-  endDate: 'Not set',
+  name: 'Loading...', price: 0, itemsAvailable: 0, itemsMinted: 0, itemsRemaining: 0, goLiveDate: 'Not set', endDate: 'Not set',
 });
 
 const isMinting = ref(false);
 const mintResult = ref(null);
 const uiMessage = ref({ text: '', type: 'info' });
-
-const apiClient = axios.create({ baseURL: API_BASE_URL });
-apiClient.interceptors.request.use(config => {
-  const token = localStorage.getItem(JWT_TOKEN_KEY);
-  if (token) config.headers.Authorization = `Bearer ${token}`;
-  return config;
-});
-apiClient.interceptors.response.use(
-  response => response.data,
-  error => {
-    console.error('API Error (MintComponent):', error.response?.data?.message || error.message);
-    return Promise.reject(error.response?.data || { message: 'API Error' });
-  }
-);
 
 const showUiMessage = (msg, type = 'info', duration = 7000) => {
   uiMessage.value = { text: msg, type };
@@ -152,17 +150,11 @@ const showUiMessage = (msg, type = 'info', duration = 7000) => {
     setTimeout(() => { uiMessage.value = { text: '', type: 'info' }; }, duration);
   }
 };
-const shortenAddress = (address, chars = 4) => {
-  if (!address) return '';
-  return `${address.slice(0, chars)}...${address.slice(-chars)}`;
-};
-const formatLamports = (lamports) => {
-  if (typeof lamports !== 'number' || isNaN(lamports)) return 'N/A';
-  return (Number(lamports) / 1_000_000_000).toFixed(4);
-};
+const shortenAddress = (address, chars = 4) => address ? `${address.slice(0, chars)}...${address.slice(-chars)}` : '';
+const formatLamports = (lamports) => (typeof lamports !== 'number' || isNaN(lamports)) ? 'N/A' : (Number(lamports) / 1_000_000_000).toFixed(4);
 const formatTimestamp = (dateObject) => {
   if (!dateObject || !(dateObject instanceof Date)) {
-      if (dateObject && typeof dateObject.basisPoints === 'bigint') {
+      if (dateObject && typeof dateObject.basisPoints === 'bigint') { // UMI dateTime is an object with basisPoints
           try {
             return new Date(Number(dateObject.basisPoints) * 1000).toLocaleString();
           } catch (e) { return 'Invalid Date'; }
@@ -176,70 +168,73 @@ const formatTimestamp = (dateObject) => {
   }
 };
 
-const tryInitializeUmi = () => {
-  // Critical guards: wallet must be connected, adapter and publicKey must be available
-  if (wallet.connected.value && wallet.wallet.value.adapter && wallet.publicKey.value) {
-    // Condition to (re-)initialize UMI:
-    // 1. UMI doesn't exist yet.
-    // 2. Or, UMI exists, but its identity's public key doesn't match the current wallet's public key.
-    if (!umi || !umi.identity.publicKey || umi.identity.publicKey.toString() !== wallet.publicKey.value.toBase58()) {
-      console.log("MintComponent: Wallet ready. Initializing/Re-initializing UMI...");
+
+const tryInitializeUmiAndAnchor = () => {
+  if (wallet.connected.value && wallet.wallet.value?.adapter && wallet.publicKey.value) {
+    // Initialize UMI
+    if (!umi || umi.identity.publicKey.toString() !== wallet.publicKey.value.toBase58()) {
       try {
         umi = createUmi(RPC_ENDPOINT)
-          .use(walletAdapterIdentity(wallet.wallet.value.adapter)) // This is where UninitializedWalletAdapterError can occur
+          .use(walletAdapterIdentity(wallet.wallet.value.adapter))
           .use(mplCandyMachine());
-        console.log("MintComponent: UMI Initialized/Updated with wallet:", wallet.publicKey.value.toBase58());
-        return true;
+        console.log("MintComponent: UMI Initialized/Updated:", wallet.publicKey.value.toBase58());
       } catch (e) {
-        console.error("MintComponent: UMI Initialization failed", e);
-        initialLoadingError.value = `Failed to initialize Solana connection: ${e.message}`;
-        showUiMessage(initialLoadingError.value, "error");
+        console.error("MintComponent: UMI Init failed", e);
+        initialLoadingError.value = `Failed to init UMI: ${e.message}`;
         umi = null; // Ensure UMI is null on failure
         return false;
       }
     }
-    // console.log("MintComponent: UMI already initialized and identity matches.");
-    return true; // UMI already initialized and identity matches
+
+    // Initialize Anchor
+    if (!anchorProgram || anchorProvider?.wallet?.publicKey?.toBase58() !== wallet.publicKey.value.toBase58()) {
+        try {
+            const connectionForAnchor = new Connection(RPC_ENDPOINT, "confirmed");
+            // Pass wallet.wallet.value.adapter which implements the SignerWalletAdapter interface
+            anchorProvider = new AnchorProvider(connectionForAnchor, wallet.wallet.value.adapter, AnchorProvider.defaultOptions());
+            anchorProgram = new Program(idl,  anchorProvider);
+            console.log("MintComponent: Anchor Program Initialized:", wallet.publicKey.value.toBase58());
+        } catch (e) {
+            console.error("MintComponent: Anchor Program Init failed", e);
+            initialLoadingError.value = (initialLoadingError.value ? initialLoadingError.value + " | " : "") + `Anchor Init: ${e.message}`;
+            anchorProgram = null; anchorProvider = null;
+            // Don't return false here, UMI might still be fine for CM loading
+        }
+    }
+    return true; // UMI is ready, Anchor status depends on its init
   }
-  // console.log("MintComponent: Wallet (useWallet) not fully ready for UMI. Clearing UMI instance if exists.");
-  if (umi) { // If UMI was previously set but wallet is no longer fully ready
-    console.log("MintComponent: Wallet no longer fully ready, clearing UMI.");
-    umi = null;
-  }
+  umi = null; anchorProgram = null; anchorProvider = null;
   return false;
 };
 
 
 const loadCandyMachineData = async () => {
   if (!props.candyMachineAddress) {
-    initialLoadingError.value = "No Candy Machine ID specified for this page.";
+    initialLoadingError.value = "No Candy Machine ID specified.";
     showUiMessage(initialLoadingError.value, "warning");
-    candyMachine.value = null; candyGuard.value = null; collectionNft.value = null;
-    candyMachineDetails.value = { name: 'N/A', price: 0, itemsAvailable: 0, itemsMinted: 0, itemsRemaining: 0, goLiveDate: 'N/A', endDate: 'N/A' };
     return;
   }
   if (!umi) {
-    initialLoadingError.value = "Solana connection (UMI) not ready. Please connect your wallet.";
+    initialLoadingError.value = "Umi (Metaplex SDK) not ready. Please connect wallet.";
     showUiMessage(initialLoadingError.value, "error");
     return;
   }
 
-  isLoadingInitialData.value = true;
-  initialLoadingError.value = '';
-  showUiMessage(`Loading Candy Machine: ${shortenAddress(props.candyMachineAddress, 6)}...`, "info", 0);
+  isLoadingInitialData.value = true; initialLoadingError.value = '';
+  showUiMessage(`Loading CM: ${shortenAddress(props.candyMachineAddress, 6)}...`, "info", 0);
 
   try {
-    const cmPublicKey = publicKey(props.candyMachineAddress);
+    const cmPublicKey = umiPublicKeyUtil(props.candyMachineAddress);
     const cmAccount = await fetchCandyMachine(umi, cmPublicKey);
     if (!cmAccount) throw new Error(`CM account not found: ${props.candyMachineAddress}`);
     candyMachine.value = cmAccount;
 
-    if (!cmAccount.mintAuthority) throw new Error("Candy Guard address (mintAuthority) not found on CM.");
+    if (!cmAccount.mintAuthority) throw new Error("CM mintAuthority (guard address) not found.");
     const cgAccount = await fetchCandyGuard(umi, cmAccount.mintAuthority);
     if (!cgAccount) throw new Error(`Candy Guard not found for CM: ${cmAccount.mintAuthority}`);
     candyGuard.value = cgAccount;
 
-    if (!cmAccount.collectionMint) throw new Error("Collection Mint address not found on CM.");
+    if (!cmAccount.collectionMint) throw new Error("CM collectionMint address not found.");
     const fetchedCollectionNft = await fetchDigitalAsset(umi, cmAccount.collectionMint);
     if (!fetchedCollectionNft) throw new Error(`Collection NFT not found: ${cmAccount.collectionMint}`);
     collectionNft.value = fetchedCollectionNft;
@@ -259,7 +254,7 @@ const loadCandyMachineData = async () => {
       goLiveDate: formatTimestamp(candyGuard.value.guards.startDate?.value?.date),
       endDate: formatTimestamp(candyGuard.value.guards.endDate?.value?.date),
     };
-    showUiMessage("Candy Machine loaded!", "success");
+    showUiMessage("", "info"); // Clear loading message
   } catch (err) {
     console.error('Error loading Candy Machine data:', err);
     initialLoadingError.value = err.message || "Failed to load CM data.";
@@ -271,171 +266,156 @@ const loadCandyMachineData = async () => {
 };
 
 const handleMintNFT = async () => {
-  if (!tryInitializeUmi()) { // Ensure UMI is ready before minting
-      showUiMessage("Wallet or Solana connection not ready. Please try again.", "error");
-      return;
+  if (!tryInitializeUmiAndAnchor() || !umi || !anchorProgram) { // Ensure Anchor program is also ready
+    showUiMessage("Wallet, Umi, or Anchor Program not ready. Please try again.", "error"); return;
   }
-  // After tryInitializeUmi, 'umi' global variable is either set or null
-  if (!umi || !candyMachine.value || !candyGuard.value || !collectionNft.value || !wallet.publicKey.value) {
-    showUiMessage("Required data or wallet connection is missing. Please connect wallet and ensure CM is loaded.", "error");
-    return;
-  }
-  if (!props.candyMachineAddress) {
-    showUiMessage("Critical error: Candy Machine address is missing for logging. Minting aborted.", "error");
-    console.error("handleMintNFT: props.candyMachineAddress is missing.");
-    return;
+  if (!candyMachine.value || !candyGuard.value || !collectionNft.value || !wallet.publicKey.value) {
+    showUiMessage("Required data missing. Ensure CM is loaded & wallet connected.", "error"); return;
   }
 
-  isMinting.value = true;
-  mintResult.value = null;
-  showUiMessage("Preparing to mint... Please approve in your wallet.", "info", 0);
+  isMinting.value = true; mintResult.value = null;
+  showUiMessage("Preparing to mint NFT... Approve in wallet.", "info", 0);
+
+  let nftMintTxSignature = '';
+  let mintedNftAddressString = '';
 
   try {
-    const nftMintSigner = generateSigner(umi);
-
-    let collectionUpdateAuthoritySigner = collectionNft.value.metadata.updateAuthority; // This is a PublicKey
-    console.log(collectionNft.value.metadata.updateAuthority.toString())
-    // If the UMI identity is the update authority, pass the identity (Signer)
-    if (umi.identity.publicKey.toString() === collectionNft.value.metadata.updateAuthority.toString()) {
-        collectionUpdateAuthoritySigner = umi.identity;
-    }
-
+    // 1. Mint NFT via Candy Machine (Umi)
+    const nftMintSigner = umiGenerateSigner(umi); // This is an Umi Signer
+    mintedNftAddressString = nftMintSigner.publicKey.toString();
 
     const solPaymentGuardValue = candyGuard.value.guards.solPayment?.value;
     let solPaymentArg = undefined;
     if (solPaymentGuardValue && solPaymentGuardValue.destination) {
-        solPaymentArg = some({ destination: solPaymentGuardValue.destination });
+        solPaymentArg = umiSome({ destination: solPaymentGuardValue.destination });
     }
-
     const startDateGuardValue = candyGuard.value.guards.startDate?.value;
     let startDateArg = undefined;
     if (startDateGuardValue && startDateGuardValue.date) {
-        startDateArg = some({ date: startDateGuardValue.date });
+        startDateArg = umiSome({ date: startDateGuardValue.date });
     }
-
-    // --- THIS SECTION IS UNCHANGED AS PER YOUR REQUEST ---
+    
     const mintV2Args = {
       candyMachine: candyMachine.value.publicKey,
       nftMint: nftMintSigner,
       collectionMint: collectionNft.value.publicKey,
-      collectionUpdateAuthority: collectionUpdateAuthoritySigner,
+      collectionUpdateAuthority: collectionNft.value.metadata.updateAuthority,
       tokenStandard: candyMachine.value.tokenStandard,
       candyGuard: candyGuard.value.publicKey,
-      mintArgs: { // Only include relevant guard args
+      mintArgs: {
         ...(solPaymentArg && { solPayment: solPaymentArg }),
         ...(startDateArg && { startDate: startDateArg }),
-        botTax: some({ lamports: sol(0.001), lastInstruction: true }), // Example bot tax
+        botTax: umiSome({ lamports: umiSol(0.001), lastInstruction: true }),
       },
     };
-    console.log("MintV2 args:", JSON.stringify(mintV2Args, (key, value) =>
-        typeof value === 'bigint' ? value.toString() : value, 2));
 
-    const builder = transactionBuilder()
+    const builder = umiTransactionBuilder()
       .add(setComputeUnitLimit(umi, { units: 800_000 }))
       .add(mintV2(umi, mintV2Args));
-    // --- END OF UNCHANGED SECTION ---
 
-    console.log("Sending mint transaction...");
-    const result = await builder.sendAndConfirm(umi, {
-      confirm: { commitment: 'finalized' },
-    });
+    const result = await builder.sendAndConfirm(umi, { confirm: { commitment: 'finalized' } });
+    nftMintTxSignature = base58.deserialize(result.signature)[0];
+    mintResult.value = { signature: nftMintTxSignature, nftMintAddress: mintedNftAddressString };
+    showUiMessage(`NFT Minted: ${shortenAddress(mintedNftAddressString)}! Sig: ${shortenAddress(nftMintTxSignature, 8)}. Logging activity...`, "success", 0);
 
-    const signatureBytes = result.signature;
-    const signature = base58.deserialize(signatureBytes)[0];
-    const mintedNftAddress = nftMintSigner.publicKey.toString();
+    // 2. Log Mint Activity On-Chain using Anchor
+    if (anchorProgram && wallet.publicKey.value) { // Ensure anchorProgram is initialized
+      const userWalletPk_web3 = wallet.publicKey.value; // web3.js PublicKey
+      const nftMintPk_web3 = new PublicKey(mintedNftAddressString); // web3.js PublicKey
+      const candyMachinePk_web3 = new PublicKey(props.candyMachineAddress); // web3.js PublicKey
+      
+      const episodePdaOption_web3 = props.episodeOnChainPda ? new PublicKey(props.episodeOnChainPda) : null;
 
-    mintResult.value = { signature, nftMintAddress:mintedNftAddress };
+      // Derive PDA for the mint_activity_account
+      const [mintActivityPDA, _bump] = await PublicKey.findProgramAddress(
+          [
+              Buffer.from("mint_activity"),
+              userWalletPk_web3.toBuffer(),
+              nftMintPk_web3.toBuffer()
+          ],
+          READIUM_FUN_PROGRAM_ID
+      );
+      
+      try {
+        const logTxSignature = await anchorProgram.methods.logMintActivity(
+          candyMachinePk_web3,      // candy_machine_id_arg (Pubkey)
+          nftMintTxSignature,       // transaction_signature_str (String)
+          episodePdaOption_web3     // episode_on_chain_pda_option (Option<Pubkey>)
+        )
+        .accounts({
+          mintActivityAccount: mintActivityPDA,
+          nftMintAddress: nftMintPk_web3, // Pass the Pubkey of the minted NFT
+          userWallet: userWalletPk_web3,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
+        
+        mintResult.value.activityLogSignature = logTxSignature;
+        showUiMessage(`NFT Minted & Activity Logged! Mint Sig: ${shortenAddress(nftMintTxSignature, 6)}, Log Sig: ${shortenAddress(logTxSignature, 6)}`, "success");
+        console.log("Mint activity logged on-chain. Tx Signature:", logTxSignature);
 
-    showUiMessage(`Successfully minted NFT: ${shortenAddress(mintedNftAddress)}! Signature: ${shortenAddress(signature, 8)}`, "success");
-
-    if (!props.candyMachineAddress) {
-        console.error("Cannot log mint activity: Candy Machine Address prop is missing after mint success.");
-        showUiMessage("Mint successful, but could not log activity due to missing CM Address. Contact support.", "warning");
+      } catch (logError) {
+          console.error('On-chain activity logging failed:', logError);
+          let logErrorMsg = logError.message || "Unknown error during on-chain logging.";
+          if (logError.logs) logErrorMsg += ` Logs: ${logError.logs.join(', ')}`;
+          showUiMessage(`NFT Minted, but on-chain activity log failed: ${logErrorMsg}`, "warning");
+      }
     } else {
-        try {
-          const logPayload = {
-            candyMachineId: props.candyMachineAddress,
-            nftMintAddress: mintedNftAddress,
-            transactionSignature: signature,
-          };
-          console.log("Logging mint activity with payload:", logPayload);
-          await apiClient.post('/mint-activities', logPayload);
-          console.log("Mint activity logged to backend.");
-        } catch (apiError) {
-          console.error("Failed to log mint activity:", apiError);
-          showUiMessage(`Mint successful (NFT: ${shortenAddress(mintedNftAddress)}), but failed to log activity. Error: ${apiError.message}`, "warning");
-        }
+        showUiMessage("NFT Minted, but Anchor program not ready for on-chain logging.", "warning");
     }
-    await loadCandyMachineData();
+    await loadCandyMachineData(); // Refresh CM details
+
   } catch (err) {
-    console.error('Minting failed:', err);
-    const errorMsg = err.message || "An unknown error occurred during minting.";
+    console.error('Minting or initial logging failed:', err);
+    let errorMsg = err.message || "An unknown error occurred during minting.";
+    if (err.logs) errorMsg += ` Logs: ${err.logs.join(', ')}`;
     showUiMessage(errorMsg, "error");
-    if (err.logs) {
-        console.error("Transaction Logs:", err.logs);
-        const programErrorLog = err.logs.find(log => log.includes("Program log: Error:") || log.includes("Program failed to complete: "));
-        if (programErrorLog) {
-            showUiMessage(`Mint failed: ${programErrorLog}`, "error");
-        }
-    }
   } finally {
     isMinting.value = false;
   }
 };
 
-// Watch for wallet state changes to initialize UMI and load data
 watch(
-  () => [wallet.connected.value, wallet.publicKey.value, wallet.wallet.value.adapter],
-  async ([isConnected, currentPublicKey, currentAdapter], [wasConnected, oldPublicKey, oldAdapter]) => {
-    console.log("Wallet watcher triggered. Connected:", isConnected, "PK available:", !!currentPublicKey, "Adapter available:", !!currentAdapter);
-    if (isConnected && currentPublicKey && currentAdapter) {
-      if (tryInitializeUmi()) {
+  () => [wallet.connected.value, wallet.publicKey.value?.toBase58(), wallet.wallet.value?.adapter],
+  async ([isConnected, currentPublicKeyString, currentAdapter], [wasConnected, oldPublicKeyString, oldAdapter]) => {
+    if (isConnected && currentAdapter) {
+      if (tryInitializeUmiAndAnchor()) {
         if (props.candyMachineAddress && (!candyMachine.value || isLoadingInitialData.value)) {
           await loadCandyMachineData();
         } else if (!props.candyMachineAddress) {
           initialLoadingError.value = "No Candy Machine ID specified.";
-          showUiMessage(initialLoadingError.value, "warning");
         }
       }
     } else if (!isConnected && wasConnected) {
-      console.log("Wallet disconnected, clearing UMI.");
-      umi = null;
+      umi = null; anchorProgram = null; anchorProvider = null;
       candyMachine.value = null; candyGuard.value = null; collectionNft.value = null;
       candyMachineDetails.value = { name: 'Loading...', price: 0, itemsAvailable: 0, itemsMinted: 0, itemsRemaining: 0, goLiveDate: 'Not set', endDate: 'Not set' };
-      if (props.candyMachineAddress) {
-        showUiMessage("Wallet disconnected. Please reconnect to mint.", "info");
-      }
+      if (props.candyMachineAddress) showUiMessage("Wallet disconnected.", "info");
     }
   },
   { immediate: true, deep: false }
 );
 
-// Watch for changes in candyMachineAddress prop
 watch(() => props.candyMachineAddress, async (newAddress, oldAddress) => {
   if (newAddress && newAddress !== oldAddress) {
-    console.log("candyMachineAddress prop changed to:", newAddress);
-    if (wallet.connected.value && wallet.wallet.value.adapter && wallet.publicKey.value) { // Check full wallet readiness
-        if (tryInitializeUmi()) {
-            await loadCandyMachineData();
-        }
+    if (wallet.connected.value && wallet.wallet.value?.adapter) {
+      if (tryInitializeUmiAndAnchor()) await loadCandyMachineData();
     } else if (!wallet.connected.value) {
-        showUiMessage("Please connect your wallet to load details for the new Candy Machine.", "info");
+      showUiMessage("Connect wallet to load new CM.", "info");
     }
-  } else if (!newAddress && oldAddress) {
-    initialLoadingError.value = "No Candy Machine ID specified.";
-    showUiMessage(initialLoadingError.value, "warning");
-    candyMachine.value = null; candyGuard.value = null; collectionNft.value = null;
-    candyMachineDetails.value = { name: 'N/A', price: 0, itemsAvailable: 0, itemsMinted: 0, itemsRemaining: 0, goLiveDate: 'N/A', endDate: 'N/A' };
+  } else if (!newAddress && oldAddress) { 
+      initialLoadingError.value = "Candy Machine ID removed.";
+      candyMachine.value = null; candyGuard.value = null; collectionNft.value = null;
+      candyMachineDetails.value = { name: 'N/A', price: 0, itemsAvailable: 0, itemsMinted: 0, itemsRemaining: 0, goLiveDate: 'N/A', endDate: 'N/A' };
   }
 }, { immediate: false });
 
 onMounted(() => {
-  // The watcher with immediate:true handles initial setup if wallet is already connected.
-  if (!props.candyMachineAddress) {
-    initialLoadingError.value = "No Candy Machine ID has been specified for this minting page.";
-  } else if (!wallet.connected.value) {
-     showUiMessage("Please connect your wallet to interact with the Candy Machine.", "info");
+  if (typeof window !== 'undefined' && !window.Buffer) { // Polyfill Buffer if needed
+    window.Buffer = Buffer;
   }
+  if (!props.candyMachineAddress) initialLoadingError.value = "No CM ID specified.";
+  // Initial UMI/Anchor setup and CM load is handled by the watcher.
 });
 
 </script>
@@ -471,32 +451,28 @@ onMounted(() => {
   color: #ffffff; /* dark:text-white */
 }
 
-/* Wallet Status Section */
-.wallet-status-section {
-  margin-bottom: 1.5rem; /* mb-6 */
-  padding: 1rem; /* p-4 */
-  border: 1px solid #e5e7eb; /* border-gray-200 */
-  border-radius: 0.375rem; /* rounded-md */
-  text-align: center;
+.wallet-prompt-section {
+    text-align: center;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background-color: #f9fafb; /* bg-gray-50 */
+    border-radius: 0.375rem; /* rounded-md */
 }
-.dark .wallet-status-section {
-  border-color: #374151; /* dark:border-gray-700 */
+.dark .wallet-prompt-section {
+    background-color: #374151; /* dark:bg-gray-700 */
 }
-.wallet-status-section .section-heading { /* h2 */
-  font-size: 1.125rem; /* text-lg */
-  font-weight: 600; /* font-semibold */
-  color: #374151; /* text-gray-700 */
-  margin-bottom: 0.75rem; /* mb-3 */
+.wallet-prompt-section .info-text {
+    margin-bottom: 0.75rem;
+    font-size: 0.875rem;
+    color: #4b5563;
 }
-.dark .wallet-status-section .section-heading {
-  color: #e5e7eb; /* dark:text-gray-200 */
+.dark .wallet-prompt-section .info-text {
+    color: #d1d5db;
 }
-.wallet-connected-info, .wallet-disconnected-info { /* Extends .info-box or .warning-box */
-  margin-top: 0.75rem; /* mt-3 */
-}
-.wallet-address-display {
-  font-family: monospace;
-  font-size: 0.875rem; /* text-sm */
+.wallet-button-wrapper {
+    display: flex;
+    justify-content: center;
+    margin-top: 1rem;
 }
 
 /* Loading and Error Indicators */
@@ -533,6 +509,10 @@ onMounted(() => {
   font-family: monospace;
   font-size: 0.75rem; /* text-xs */
 }
+.episode-link-display {
+    font-family: monospace;
+    font-weight: normal;
+}
 .initial-load-error { /* Extends .error-box */
   text-align: center;
 }
@@ -566,6 +546,7 @@ onMounted(() => {
 .cm-detail-item {
   font-size: 0.875rem; /* text-sm */
   color: #4b5563; /* text-gray-600 */
+  margin-bottom: 0.25rem;
 }
 .dark .cm-detail-item {
   color: #9ca3af; /* dark:text-gray-400 */
@@ -581,6 +562,11 @@ onMounted(() => {
 .dark .cm-date-info {
   color: #d1d5db; /* dark:text-gray-300 */
 }
+.info-text-sm {
+    font-size: 0.75rem; /* text-xs */
+    margin-top: 0.5rem; /* mt-2 */
+}
+
 
 .mint-button-container {
   text-align: center;
