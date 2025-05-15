@@ -77,15 +77,16 @@ const AUTH_API_BASE_URL = TALES_API_BASE_URL;
 const JWT_TOKEN_KEY = 'readium_fun_jwt_token';
 const SOLANA_RPC_URL = import.meta.env.VITE_RPC_ENDPOINT || 'https://api.devnet.solana.com';
 
-import idlFromFile from '../components/readium_fun.json' // Adjust path as necessary
-const PROGRAM_ID = new PublicKey("EynuKneQ6RX5AAUY8E6Lq6WvNrUVY2F3C8TcFNB7MYh8");
+import idlFromFile from '../anchor/tale_story' // Adjust path as necessary
+const PROGRAM_ID = new PublicKey("HoSn8RTHXrJmTgw5Wc6XMQDDVdvhuj2VUg6HVtVtPjXe");
 const idl = idlFromFile;
-
+const PROGRAM_ID_NFT = new PublicKey("DJgfvt8jXgkXXkRx7CaFa9FJSXbcc1SALnfyCdXHZR1j")
 // --- Wallet and Program ---
 const wallet = useWallet();
 const connection = new Connection(SOLANA_RPC_URL, "confirmed");
 let provider;
 let program;
+let programNft;
 
 // --- Reactive State ---
 const taleOnChainAccountData = ref(null);
@@ -114,6 +115,7 @@ watch(() => wallet.connected.value, (isConnected) => {
              provider = new AnchorProvider(connection, wallet.wallet.value.adapter, AnchorProvider.defaultOptions());
              try {
                 program = new Program(idl, provider);
+                programNft = new Program(idl,provider)
                 console.log("TaleDetailView: Anchor Program Initialized.");
              } catch (e) {
                 console.error("TaleDetailView: Error initializing Anchor Program:", e);

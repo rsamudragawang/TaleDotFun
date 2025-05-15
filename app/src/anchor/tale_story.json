@@ -1,0 +1,608 @@
+{
+  "address": "HoSn8RTHXrJmTgw5Wc6XMQDDVdvhuj2VUg6HVtVtPjXe",
+  "metadata": {
+    "name": "tale_story",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
+    {
+      "name": "create_episode",
+      "discriminator": [
+        80,
+        93,
+        70,
+        84,
+        241,
+        235,
+        183,
+        26
+      ],
+      "accounts": [
+        {
+          "name": "episode_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  112,
+                  105,
+                  115,
+                  111,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "parent_tale_account"
+              },
+              {
+                "kind": "arg",
+                "path": "episode_id_seed"
+              }
+            ]
+          }
+        },
+        {
+          "name": "parent_tale_account"
+        },
+        {
+          "name": "author",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "episode_id_seed",
+          "type": "string"
+        },
+        {
+          "name": "episode_name",
+          "type": "string"
+        },
+        {
+          "name": "content_cid",
+          "type": "string"
+        },
+        {
+          "name": "image_set_id",
+          "type": "string"
+        },
+        {
+          "name": "order",
+          "type": "u32"
+        },
+        {
+          "name": "initial_status",
+          "type": "u8"
+        },
+        {
+          "name": "is_nft",
+          "type": "bool"
+        },
+        {
+          "name": "candy_machine_id",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "create_tale",
+      "discriminator": [
+        97,
+        241,
+        193,
+        26,
+        247,
+        45,
+        207,
+        73
+      ],
+      "accounts": [
+        {
+          "name": "tale_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  97,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "tale_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "author",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "tale_id",
+          "type": "string"
+        },
+        {
+          "name": "title",
+          "type": "string"
+        },
+        {
+          "name": "content_cid",
+          "type": "string"
+        },
+        {
+          "name": "genre",
+          "type": "string"
+        },
+        {
+          "name": "cover_image_cid",
+          "type": "string"
+        },
+        {
+          "name": "initial_status",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "delete_episode",
+      "discriminator": [
+        136,
+        15,
+        240,
+        166,
+        34,
+        71,
+        105,
+        125
+      ],
+      "accounts": [
+        {
+          "name": "episode_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  112,
+                  105,
+                  115,
+                  111,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "episode_account.parent_tale",
+                "account": "Episode"
+              },
+              {
+                "kind": "account",
+                "path": "episode_account.episode_id_seed",
+                "account": "Episode"
+              }
+            ]
+          }
+        },
+        {
+          "name": "author",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "episode_account"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "delete_tale",
+      "discriminator": [
+        86,
+        32,
+        28,
+        147,
+        75,
+        234,
+        169,
+        161
+      ],
+      "accounts": [
+        {
+          "name": "tale_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  97,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tale_account.tale_id",
+                "account": "Tale"
+              }
+            ]
+          }
+        },
+        {
+          "name": "author",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "tale_account"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "update_episode",
+      "discriminator": [
+        222,
+        18,
+        151,
+        195,
+        227,
+        115,
+        63,
+        123
+      ],
+      "accounts": [
+        {
+          "name": "episode_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  112,
+                  105,
+                  115,
+                  111,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "episode_account.parent_tale",
+                "account": "Episode"
+              },
+              {
+                "kind": "account",
+                "path": "episode_account.episode_id_seed",
+                "account": "Episode"
+              }
+            ]
+          }
+        },
+        {
+          "name": "author",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "episode_account"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "new_episode_name",
+          "type": "string"
+        },
+        {
+          "name": "new_content_cid",
+          "type": "string"
+        },
+        {
+          "name": "new_image_set_id",
+          "type": "string"
+        },
+        {
+          "name": "new_order",
+          "type": "u32"
+        },
+        {
+          "name": "new_status",
+          "type": "u8"
+        },
+        {
+          "name": "new_is_nft",
+          "type": "bool"
+        },
+        {
+          "name": "new_candy_machine_id",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "update_tale",
+      "discriminator": [
+        168,
+        83,
+        72,
+        113,
+        172,
+        101,
+        87,
+        217
+      ],
+      "accounts": [
+        {
+          "name": "tale_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  97,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "tale_account.tale_id",
+                "account": "Tale"
+              }
+            ]
+          }
+        },
+        {
+          "name": "author",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "tale_account"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "new_title",
+          "type": "string"
+        },
+        {
+          "name": "new_content_cid",
+          "type": "string"
+        },
+        {
+          "name": "new_genre",
+          "type": "string"
+        },
+        {
+          "name": "new_cover_image_cid",
+          "type": "string"
+        },
+        {
+          "name": "new_status",
+          "type": "u8"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Episode",
+      "discriminator": [
+        41,
+        175,
+        64,
+        71,
+        108,
+        169,
+        208,
+        47
+      ]
+    },
+    {
+      "name": "Tale",
+      "discriminator": [
+        109,
+        239,
+        69,
+        41,
+        35,
+        229,
+        44,
+        219
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "TitleTooLong",
+      "msg": "Title is too long."
+    },
+    {
+      "code": 6001,
+      "name": "ContentCidTooLong",
+      "msg": "Content CID is too long."
+    },
+    {
+      "code": 6002,
+      "name": "GenreTooLong",
+      "msg": "Genre is too long."
+    },
+    {
+      "code": 6003,
+      "name": "CoverImageCidTooLong",
+      "msg": "Cover image CID is too long."
+    },
+    {
+      "code": 6004,
+      "name": "Unauthorized",
+      "msg": "Unauthorized action."
+    },
+    {
+      "code": 6005,
+      "name": "InvalidStatus",
+      "msg": "Invalid status value."
+    },
+    {
+      "code": 6006,
+      "name": "CannotDeletePublished",
+      "msg": "Cannot delete a published tale directly. Set to archived first."
+    },
+    {
+      "code": 6007,
+      "name": "EpisodeIdSeedTooLong",
+      "msg": "Episode ID (seed) is too long."
+    },
+    {
+      "code": 6008,
+      "name": "EpisodeNameTooLong",
+      "msg": "Episode name is too long."
+    },
+    {
+      "code": 6009,
+      "name": "ImageSetIdTooLong",
+      "msg": "Image Set ID is too long."
+    },
+    {
+      "code": 6010,
+      "name": "CandyMachineIdTooLong",
+      "msg": "Candy Machine ID is too long."
+    }
+  ],
+  "types": [
+    {
+      "name": "Episode",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "author",
+            "type": "pubkey"
+          },
+          {
+            "name": "parent_tale",
+            "type": "pubkey"
+          },
+          {
+            "name": "episode_id_seed",
+            "type": "string"
+          },
+          {
+            "name": "episode_name",
+            "type": "string"
+          },
+          {
+            "name": "content_cid",
+            "type": "string"
+          },
+          {
+            "name": "image_set_id",
+            "type": "string"
+          },
+          {
+            "name": "order",
+            "type": "u32"
+          },
+          {
+            "name": "status",
+            "type": "u8"
+          },
+          {
+            "name": "is_nft",
+            "type": "bool"
+          },
+          {
+            "name": "candy_machine_id",
+            "type": "string"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Tale",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "author",
+            "type": "pubkey"
+          },
+          {
+            "name": "tale_id",
+            "type": "string"
+          },
+          {
+            "name": "title",
+            "type": "string"
+          },
+          {
+            "name": "content_cid",
+            "type": "string"
+          },
+          {
+            "name": "genre",
+            "type": "string"
+          },
+          {
+            "name": "cover_image_cid",
+            "type": "string"
+          },
+          {
+            "name": "status",
+            "type": "u8"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ]
+}

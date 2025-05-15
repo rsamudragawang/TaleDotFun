@@ -201,9 +201,13 @@ const props = defineProps({
 const API_BASE_URL = import.meta.env.VITE_APP_AUTH_API_URL || 'http://localhost:3000/api';
 const JWT_TOKEN_KEY = 'readium_fun_jwt_token';
 const SOLANA_RPC_URL = import.meta.env.VITE_RPC_ENDPOINT || 'https://api.devnet.solana.com';
-import idlFromFile from './readium_fun.json'
-const PROGRAM_ID = new PublicKey("EynuKneQ6RX5AAUY8E6Lq6WvNrUVY2F3C8TcFNB7MYh8");
+import idlFromFile from '../anchor/tale_story' // Adjust path as necessary
+const PROGRAM_ID = new PublicKey("HoSn8RTHXrJmTgw5Wc6XMQDDVdvhuj2VUg6HVtVtPjXe");
+import idlFromFileNft from '../anchor/tale_nft' // Adjust path as necessary
+const READIUM_FUN_PROGRAM_ID_NFT = new PublicKey("DJgfvt8jXgkXXkRx7CaFa9FJSXbcc1SALnfyCdXHZR1j"); // Your Program ID from IDL
+
 const idl = idlFromFile;
+const idlNft = idlFromFileNft
 const MAX_ONCHAIN_EPISODE_ID_SEED_LENGTH = 32;
 
 // --- Wallet and Program ---
@@ -211,6 +215,7 @@ const wallet = useWallet();
 const connection = new Connection(SOLANA_RPC_URL, "confirmed");
 let provider;
 let program;
+let programNft;
 
 // --- Component State ---
 const fetchedOnChainEpisodes = ref([]);
@@ -309,6 +314,7 @@ watch([() => wallet.connected.value, () => props.parentTale?.onChainPdaString, (
              provider = new AnchorProvider(connection, wallet.wallet.value.adapter, AnchorProvider.defaultOptions());
              try {
                 program = new Program(idl, provider);
+                programNft = new Program(idlNft,provider)
                 console.log("EpisodeManager: Anchor Program Initialized.");
                 programJustInitialized = true;
              } catch (e) { console.error("EpisodeManager: Error initializing Program:", e); program = null; provider = null; return; }
@@ -357,7 +363,7 @@ async function fetchUserOnChainMintActivities() {
     isLoadingUserMintActivities.value = true;
     try {
         const userPk = new PublicKey(props.appUser.walletAddress);
-        const activities = await program.account.mintActivity.all([
+        const activities = await programNft.account.mintActivity.all([
             { memcmp: { offset: 8, bytes: userPk.toBase58() } }
         ]);
         userOnChainMintActivities.value = activities;

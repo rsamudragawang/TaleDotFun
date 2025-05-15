@@ -5,12 +5,10 @@ package_manager = "yarn"
 resolution = true
 skip-lint = false
 
-[programs.localnet]
-readium_fun = "EynuKneQ6RX5AAUY8E6Lq6WvNrUVY2F3C8TcFNB7MYh8"
-
 [programs.devnet]
-readium_fun = "EynuKneQ6RX5AAUY8E6Lq6WvNrUVY2F3C8TcFNB7MYh8"
-
+tale_governance = "HTEJ6qZURvoHMwDCkDHNnfYYhcfCVkmzNTBDjKQHb1mF"
+tale_nft = "DJgfvt8jXgkXXkRx7CaFa9FJSXbcc1SALnfyCdXHZR1j"
+tale_story = "HoSn8RTHXrJmTgw5Wc6XMQDDVdvhuj2VUg6HVtVtPjXe"
 
 [registry]
 url = "https://api.apr.dev"

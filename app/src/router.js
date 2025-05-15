@@ -46,6 +46,8 @@ import Auth from './components/auth.vue'; // Or './views/Auth.vue' if you move i
 import TaleManager from './components/TaleManager.vue';
 import CandyMachineCreator from './components/CandyMachineCreator.vue';
 import MintComponent from './components/MintComponent.vue';
+import Governance from './components/Governance.vue';
+
 
 // If you have a specific view for Tale Details that might use EpisodeManager
 const TaleDetailView = () => import('./views/TaleDetailView.vue'); // Example for lazy loading
@@ -73,9 +75,9 @@ const routes = [
     props: true,
   },
   {
-    path: '/create-candy-machine',
-    name: 'CreateCandyMachine',
-    component: CandyMachineCreator,
+    path: '/governance',
+    name: 'Governance',
+    component: Governance,
   },
   {
     path: '/mint/:candyMachineAddress', // General mint page, or make it dynamic like /mint/:candyMachineAddress

@@ -1,0 +1,651 @@
+{
+  "address": "HTEJ6qZURvoHMwDCkDHNnfYYhcfCVkmzNTBDjKQHb1mF",
+  "metadata": {
+    "name": "tale_governance",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
+    {
+      "name": "cast_vote",
+      "discriminator": [
+        20,
+        212,
+        15,
+        189,
+        69,
+        180,
+        69,
+        151
+      ],
+      "accounts": [
+        {
+          "name": "voter",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "vote",
+          "writable": true
+        },
+        {
+          "name": "vote_record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  111,
+                  116,
+                  101,
+                  95,
+                  114,
+                  101,
+                  99,
+                  111,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vote"
+              },
+              {
+                "kind": "account",
+                "path": "voter"
+              }
+            ]
+          }
+        },
+        {
+          "name": "nft_token_account"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "choice_index",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "create_vote",
+      "discriminator": [
+        173,
+        115,
+        165,
+        78,
+        226,
+        132,
+        205,
+        254
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "vote",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  111,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              },
+              {
+                "kind": "arg",
+                "path": "voting_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vote_record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  111,
+                  116,
+                  101,
+                  95,
+                  114,
+                  101,
+                  99,
+                  111,
+                  114,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vote"
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "voting_id",
+          "type": "string"
+        },
+        {
+          "name": "question",
+          "type": "string"
+        },
+        {
+          "name": "description",
+          "type": "string"
+        },
+        {
+          "name": "choices",
+          "type": {
+            "vec": "string"
+          }
+        },
+        {
+          "name": "start_time",
+          "type": "i64"
+        },
+        {
+          "name": "end_time",
+          "type": "i64"
+        },
+        {
+          "name": "nft_mint",
+          "type": {
+            "option": "pubkey"
+          }
+        },
+        {
+          "name": "regular_vote_power",
+          "type": "u64"
+        },
+        {
+          "name": "nft_vote_power",
+          "type": "u64"
+        },
+        {
+          "name": "category",
+          "type": {
+            "defined": {
+              "name": "VoteCategory"
+            }
+          }
+        },
+        {
+          "name": "tags",
+          "type": {
+            "vec": "string"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finalize_vote",
+      "discriminator": [
+        181,
+        176,
+        6,
+        248,
+        249,
+        134,
+        146,
+        56
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "vote",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "get_results",
+      "discriminator": [
+        137,
+        44,
+        100,
+        59,
+        220,
+        97,
+        105,
+        111
+      ],
+      "accounts": [
+        {
+          "name": "vote"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "list_votes",
+      "discriminator": [
+        174,
+        165,
+        157,
+        112,
+        67,
+        240,
+        194,
+        148
+      ],
+      "accounts": [
+        {
+          "name": "vote_list",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "status",
+          "type": {
+            "defined": {
+              "name": "VoteStatus"
+            }
+          }
+        },
+        {
+          "name": "category",
+          "type": {
+            "option": {
+              "defined": {
+                "name": "VoteCategory"
+              }
+            }
+          }
+        },
+        {
+          "name": "page",
+          "type": "u8"
+        },
+        {
+          "name": "page_size",
+          "type": "u8"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Vote",
+      "discriminator": [
+        96,
+        91,
+        104,
+        57,
+        145,
+        35,
+        172,
+        155
+      ]
+    },
+    {
+      "name": "VoteList",
+      "discriminator": [
+        104,
+        185,
+        248,
+        30,
+        17,
+        34,
+        33,
+        161
+      ]
+    },
+    {
+      "name": "VoteRecord",
+      "discriminator": [
+        112,
+        9,
+        123,
+        165,
+        234,
+        9,
+        157,
+        167
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "InvalidTimeRange",
+      "msg": "Invalid time range"
+    },
+    {
+      "code": 6001,
+      "name": "InvalidChoices",
+      "msg": "Invalid number of choices"
+    },
+    {
+      "code": 6002,
+      "name": "InvalidVotePower",
+      "msg": "Invalid vote power"
+    },
+    {
+      "code": 6003,
+      "name": "VoteNotActive",
+      "msg": "Vote is not active"
+    },
+    {
+      "code": 6004,
+      "name": "VoteNotStarted",
+      "msg": "Vote has not started yet"
+    },
+    {
+      "code": 6005,
+      "name": "VoteEnded",
+      "msg": "Vote has ended"
+    },
+    {
+      "code": 6006,
+      "name": "InvalidChoice",
+      "msg": "Invalid choice index"
+    },
+    {
+      "code": 6007,
+      "name": "InvalidNFT",
+      "msg": "Invalid NFT"
+    },
+    {
+      "code": 6008,
+      "name": "NotNFTOwner",
+      "msg": "Not the NFT owner"
+    },
+    {
+      "code": 6009,
+      "name": "VoteStillActive",
+      "msg": "Vote is still active"
+    },
+    {
+      "code": 6010,
+      "name": "AlreadyVoted",
+      "msg": "Already voted"
+    },
+    {
+      "code": 6011,
+      "name": "NotCreator",
+      "msg": "Not the creator"
+    },
+    {
+      "code": 6012,
+      "name": "TooManyTags",
+      "msg": "Too many tags"
+    },
+    {
+      "code": 6013,
+      "name": "InvalidVoteId",
+      "msg": "Invalid vote ID"
+    }
+  ],
+  "types": [
+    {
+      "name": "Vote",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "question",
+            "type": "string"
+          },
+          {
+            "name": "voting_id",
+            "type": "string"
+          },
+          {
+            "name": "description",
+            "type": "string"
+          },
+          {
+            "name": "choices",
+            "type": {
+              "vec": "string"
+            }
+          },
+          {
+            "name": "start_time",
+            "type": "i64"
+          },
+          {
+            "name": "end_time",
+            "type": "i64"
+          },
+          {
+            "name": "nft_mint",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "regular_vote_power",
+            "type": "u64"
+          },
+          {
+            "name": "nft_vote_power",
+            "type": "u64"
+          },
+          {
+            "name": "total_votes",
+            "type": {
+              "vec": "u64"
+            }
+          },
+          {
+            "name": "is_active",
+            "type": "bool"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "total_participants",
+            "type": "u64"
+          },
+          {
+            "name": "regular_voters",
+            "type": "u64"
+          },
+          {
+            "name": "nft_voters",
+            "type": "u64"
+          },
+          {
+            "name": "category",
+            "type": {
+              "defined": {
+                "name": "VoteCategory"
+              }
+            }
+          },
+          {
+            "name": "tags",
+            "type": {
+              "vec": "string"
+            }
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "VoteStatus"
+              }
+            }
+          },
+          {
+            "name": "winning_choice",
+            "type": {
+              "option": "u8"
+            }
+          },
+          {
+            "name": "total_vote_power",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VoteCategory",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Content"
+          },
+          {
+            "name": "Feature"
+          },
+          {
+            "name": "Community"
+          },
+          {
+            "name": "Technical"
+          },
+          {
+            "name": "Other"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VoteList",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "VoteStatus"
+              }
+            }
+          },
+          {
+            "name": "category",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "VoteCategory"
+                }
+              }
+            }
+          },
+          {
+            "name": "page",
+            "type": "u8"
+          },
+          {
+            "name": "page_size",
+            "type": "u8"
+          },
+          {
+            "name": "last_updated",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VoteRecord",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vote",
+            "type": "pubkey"
+          },
+          {
+            "name": "voter",
+            "type": "pubkey"
+          },
+          {
+            "name": "has_voted",
+            "type": "bool"
+          },
+          {
+            "name": "vote_power",
+            "type": "u64"
+          },
+          {
+            "name": "voted_choice",
+            "type": {
+              "option": "u8"
+            }
+          },
+          {
+            "name": "voted_at",
+            "type": {
+              "option": "i64"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "VoteStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Upcoming"
+          },
+          {
+            "name": "Active"
+          },
+          {
+            "name": "Completed"
+          }
+        ]
+      }
+    }
+  ]
+}
