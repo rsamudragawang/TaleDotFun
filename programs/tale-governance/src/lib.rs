@@ -193,6 +193,7 @@ pub struct CastVote<'info> {
         bump
     )]
     pub vote_record: Account<'info, VoteRecord>,
+    /// CHECK: This is the user's NFT token account. We check mint and owner in the instruction.
     pub nft_token_account: AccountInfo<'info>,
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,

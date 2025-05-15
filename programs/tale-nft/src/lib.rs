@@ -21,7 +21,6 @@ pub enum AppError {
 }
 
 // --- Constants for String Lengths ---
-const MAX_CANDY_MACHINE_ID_LENGTH: usize = 44; // Solana pubkey base58
 const MAX_TX_SIGNATURE_LENGTH: usize = 88; // Solana Base58 signatures
 
 #[account]

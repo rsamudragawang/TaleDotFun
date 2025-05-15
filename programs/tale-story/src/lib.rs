@@ -27,6 +27,8 @@ pub enum AppError {
     EpisodeNameTooLong,
     #[msg("Image Set ID is too long.")]
     ImageSetIdTooLong,
+    #[msg("Candy Machine ID is too long.")]
+    CandyMachineIdTooLong,
 }
 
 // --- Constants for String Lengths ---
