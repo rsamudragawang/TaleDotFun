@@ -133,11 +133,11 @@ export default {
               Tales
             </router-link>
             <router-link
-              :to="{ name: 'CreateCandyMachine' }"
+              :to="{ name: 'Governance' }"
               class="nav-link"
               active-class="nav-link-active"
             >
-              Create CM
+              Governance
             </router-link>
             <router-link
               :to="{ name: 'MintGeneral' }"
