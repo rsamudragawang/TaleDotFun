@@ -5,7 +5,8 @@ const {
   getMintActivitiesByUserWallet,
   getMintActivitiesByCandyMachine,
   getMintActivityByNftMint,
-  getAllMintActivities
+  getAllMintActivities,
+  getPublicMintActivities
 } = require('../controllers/mintActivityController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 
@@ -22,5 +23,7 @@ router.get('/by-nft/:nftMintAddress', getMintActivityByNftMint);     // Public
 // Get all mint activities (Admin only)
 router.get('/', protect, authorize('admin'), getAllMintActivities);
 
+// Get all public/ready mint activities (public)
+router.get('/public', getPublicMintActivities);
 
 module.exports = router;
