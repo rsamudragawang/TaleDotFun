@@ -1,5 +1,5 @@
 // readium-fun/backend/controllers/ipfsController.js
-const { pinFileBufferToIPFS, pinJSONToIPFS, pinTextAsFileToIPFS } = require('../services/pinataServiceBE'); // Assuming you rename or use this path
+const { pinFileBufferToIPFS, pinJSONToIPFS, pinTextAsFileToIPFS } = require('../services/pinataService'); // Assuming you rename or use this path
 
 // @desc    Upload a file to IPFS via Pinata
 // @route   POST /api/ipfs/upload-file
