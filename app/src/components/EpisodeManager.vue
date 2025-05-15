@@ -201,8 +201,8 @@ const props = defineProps({
 const API_BASE_URL = import.meta.env.VITE_APP_AUTH_API_URL || 'http://localhost:3000/api';
 const JWT_TOKEN_KEY = 'readium_fun_jwt_token';
 const SOLANA_RPC_URL = import.meta.env.VITE_RPC_ENDPOINT || 'https://api.devnet.solana.com';
-import idlFromFile from './readium_fun.json'
-const PROGRAM_ID = new PublicKey("EynuKneQ6RX5AAUY8E6Lq6WvNrUVY2F3C8TcFNB7MYh8");
+import idlFromFile from '../anchor/tale_story' // Adjust path as necessary
+const PROGRAM_ID = new PublicKey("Bm3TKKmR1dqwmNxAhQAJ6V6pdTZgykMVzxL2q2eVKqkQ");
 const idl = idlFromFile;
 const MAX_ONCHAIN_EPISODE_ID_SEED_LENGTH = 32;
 
