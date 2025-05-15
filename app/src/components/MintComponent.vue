@@ -374,10 +374,9 @@ const handleMintNFT = async () => {
     isMinting.value = false;
   }
 };
-
 watch(
   () => [wallet.connected.value, wallet.publicKey.value?.toBase58(), wallet.wallet.value?.adapter],
-  async ([isConnected, currentPublicKeyString, currentAdapter], [wasConnected, oldPublicKeyString, oldAdapter]) => {
+  async ([isConnected, currentPublicKeyString, currentAdapter], [wasConnected, oldPublicKeyString, oldAdapter] = []) => {
     if (isConnected && currentAdapter) {
       if (tryInitializeUmiAndAnchor()) {
         if (props.candyMachineAddress && (!candyMachine.value || isLoadingInitialData.value)) {
@@ -396,9 +395,11 @@ watch(
   { immediate: true, deep: false }
 );
 
+
 watch(() => props.candyMachineAddress, async (newAddress, oldAddress) => {
   if (newAddress && newAddress !== oldAddress) {
     if (wallet.connected.value && wallet.wallet.value?.adapter) {
+      conosle.log("umi")
       if (tryInitializeUmiAndAnchor()) await loadCandyMachineData();
     } else if (!wallet.connected.value) {
       showUiMessage("Connect wallet to load new CM.", "info");
