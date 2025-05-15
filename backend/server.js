@@ -109,3 +109,5 @@ app.listen(PORT, () => {
     console.log(`Pinata API Key: ${process.env.PINATA_API_KEY ? 'Loaded' : 'MISSING!'}`);
     console.log(`Pinata Secret Key: ${process.env.PINATA_API_SECRET ? 'Loaded' : 'MISSING!'}`);
 });
+
+module.exports = app;
