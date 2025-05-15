@@ -1,130 +1,12 @@
 {
-  "address": "EynuKneQ6RX5AAUY8E6Lq6WvNrUVY2F3C8TcFNB7MYh8",
+  "address": "Bm3TKKmR1dqwmNxAhQAJ6V6pdTZgykMVzxL2q2eVKqkQ",
   "metadata": {
-    "name": "readium_fun",
+    "name": "tale_story",
     "version": "0.1.0",
     "spec": "0.1.0",
     "description": "Created with Anchor"
   },
   "instructions": [
-    {
-      "name": "cancel_mint_activity",
-      "discriminator": [
-        87,
-        117,
-        99,
-        43,
-        133,
-        74,
-        129,
-        52
-      ],
-      "accounts": [
-        {
-          "name": "mint_activity_account",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  109,
-                  105,
-                  110,
-                  116,
-                  95,
-                  97,
-                  99,
-                  116,
-                  105,
-                  118,
-                  105,
-                  116,
-                  121
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "user_wallet"
-              },
-              {
-                "kind": "account",
-                "path": "mint_activity_account.nft_mint_address",
-                "account": "MintActivity"
-              }
-            ]
-          }
-        },
-        {
-          "name": "user_wallet",
-          "writable": true,
-          "signer": true,
-          "relations": [
-            "mint_activity_account"
-          ]
-        }
-      ],
-      "args": []
-    },
-    {
-      "name": "close_mint_activity_account",
-      "discriminator": [
-        132,
-        206,
-        53,
-        129,
-        50,
-        119,
-        2,
-        144
-      ],
-      "accounts": [
-        {
-          "name": "mint_activity_account",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  109,
-                  105,
-                  110,
-                  116,
-                  95,
-                  97,
-                  99,
-                  116,
-                  105,
-                  118,
-                  105,
-                  116,
-                  121
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "user_wallet"
-              },
-              {
-                "kind": "account",
-                "path": "mint_activity_account.nft_mint_address",
-                "account": "MintActivity"
-              }
-            ]
-          }
-        },
-        {
-          "name": "user_wallet",
-          "writable": true,
-          "signer": true,
-          "relations": [
-            "mint_activity_account"
-          ]
-        }
-      ],
-      "args": []
-    },
     {
       "name": "create_episode",
       "discriminator": [
@@ -386,83 +268,6 @@
       "args": []
     },
     {
-      "name": "log_mint_activity",
-      "discriminator": [
-        191,
-        132,
-        131,
-        41,
-        166,
-        56,
-        67,
-        11
-      ],
-      "accounts": [
-        {
-          "name": "mint_activity_account",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  109,
-                  105,
-                  110,
-                  116,
-                  95,
-                  97,
-                  99,
-                  116,
-                  105,
-                  118,
-                  105,
-                  116,
-                  121
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "user_wallet"
-              },
-              {
-                "kind": "account",
-                "path": "nft_mint_address"
-              }
-            ]
-          }
-        },
-        {
-          "name": "nft_mint_address"
-        },
-        {
-          "name": "user_wallet",
-          "writable": true,
-          "signer": true
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "candy_machine_id_arg",
-          "type": "pubkey"
-        },
-        {
-          "name": "transaction_signature_str",
-          "type": "string"
-        },
-        {
-          "name": "episode_on_chain_pda_option",
-          "type": {
-            "option": "pubkey"
-          }
-        }
-      ]
-    },
-    {
       "name": "update_episode",
       "discriminator": [
         222,
@@ -628,19 +433,6 @@
       ]
     },
     {
-      "name": "MintActivity",
-      "discriminator": [
-        80,
-        211,
-        14,
-        111,
-        124,
-        247,
-        141,
-        198
-      ]
-    },
-    {
       "name": "Tale",
       "discriminator": [
         109,
@@ -687,58 +479,28 @@
     },
     {
       "code": 6006,
-      "name": "TalePublished",
-      "msg": "Tale is already published and cannot be modified in this way."
-    },
-    {
-      "code": 6007,
       "name": "CannotDeletePublished",
       "msg": "Cannot delete a published tale directly. Set to archived first."
     },
     {
-      "code": 6008,
+      "code": 6007,
       "name": "EpisodeIdSeedTooLong",
       "msg": "Episode ID (seed) is too long."
     },
     {
-      "code": 6009,
+      "code": 6008,
       "name": "EpisodeNameTooLong",
       "msg": "Episode name is too long."
     },
     {
-      "code": 6010,
+      "code": 6009,
       "name": "ImageSetIdTooLong",
       "msg": "Image Set ID is too long."
     },
     {
-      "code": 6011,
+      "code": 6010,
       "name": "CandyMachineIdTooLong",
       "msg": "Candy Machine ID is too long."
-    },
-    {
-      "code": 6012,
-      "name": "EpisodeNftLocked",
-      "msg": "Episode is NFT linked and cannot be modified in this way."
-    },
-    {
-      "code": 6013,
-      "name": "ParentTaleMismatch",
-      "msg": "Parent tale account does not match."
-    },
-    {
-      "code": 6014,
-      "name": "TxSignatureTooLong",
-      "msg": "Transaction signature string is too long."
-    },
-    {
-      "code": 6015,
-      "name": "MintActivityAlreadyCancelled",
-      "msg": "Mint activity already cancelled."
-    },
-    {
-      "code": 6016,
-      "name": "MintActivityNotFound",
-      "msg": "Mint activity not found or already closed."
     }
   ],
   "types": [
@@ -790,48 +552,6 @@
           {
             "name": "timestamp",
             "type": "i64"
-          },
-          {
-            "name": "bump",
-            "type": "u8"
-          }
-        ]
-      }
-    },
-    {
-      "name": "MintActivity",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "user_wallet",
-            "type": "pubkey"
-          },
-          {
-            "name": "candy_machine_id",
-            "type": "pubkey"
-          },
-          {
-            "name": "nft_mint_address",
-            "type": "pubkey"
-          },
-          {
-            "name": "transaction_signature",
-            "type": "string"
-          },
-          {
-            "name": "episode_on_chain_pda",
-            "type": {
-              "option": "pubkey"
-            }
-          },
-          {
-            "name": "timestamp",
-            "type": "i64"
-          },
-          {
-            "name": "status",
-            "type": "u8"
           },
           {
             "name": "bump",
