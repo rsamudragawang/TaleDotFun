@@ -31,14 +31,14 @@
           <label for="nameInput" class="form-label">Your Name:</label>
           <input type="text" id="nameInput" v-model="name" class="form-input-auth" placeholder="Enter your display name" required>
         </div>
-        <div>
+        <!-- <div>
           <label for="typeInput" class="form-label">User Type (optional):</label>
           <select id="typeInput" v-model="userType" class="form-input-auth">
             <option value="user">User</option>
             <option value="creator">Creator</option>
             <option value="customer">Customer</option>
           </select>
-        </div>
+        </div> -->
         <button type="submit" :disabled="isLoadingAuth" class="btn btn-success form-submit-button">
           {{ isLoadingAuth ? 'Completing Registration...' : 'Complete Registration' }}
         </button>
@@ -99,7 +99,7 @@ const isAuthenticated = computed(() => !!token.value && !!currentUser.value);
 
 // Form Inputs for registration
 const name = ref('');
-const userType = ref('user');
+const userType = ref('creator');
 
 // UI Message
 const uiMessage = ref({ text: '', type: 'info' });
