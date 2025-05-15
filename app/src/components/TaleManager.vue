@@ -152,7 +152,7 @@ const JWT_TOKEN_KEY = 'readium_fun_jwt_token';
 const SOLANA_RPC_URL = import.meta.env.VITE_RPC_ENDPOINT || 'https://api.devnet.solana.com';
 
 // **IMPORTANT**: Replace the placeholder IDL below with a direct import of your actual generated IDL JSON file.
-import idlFromFile from '../../../target/idl/readium_fun.json'; // Adjust path
+import idl from './readium_fun.json'
 // Then use: const idl = idlFromFile;
 // The PROGRAM_ID must also match the "address" in your IDL's metadata.
 const PROGRAM_ID = new PublicKey("EynuKneQ6RX5AAUY8E6Lq6WvNrUVY2F3C8TcFNB7MYh8"); // Updated to your IDL's address
