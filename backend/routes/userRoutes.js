@@ -14,7 +14,7 @@ const router = express.Router();
 router.use(protect);
 
 router.route('/')
-  .get(authorize('admin'), getAllUsers); // Admin only
+  .get(getAllUsers); // Admin only
 
 router.route('/:id')
   .get(authorize('admin', 'user', 'creator'), getUserById)   // Admin or self

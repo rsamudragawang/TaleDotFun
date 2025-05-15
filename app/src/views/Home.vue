@@ -60,7 +60,23 @@
             </button>
           </div>
         </div>
+
+       
       </div>
+      <div v-for="creator in creator" :key="creator._id" class="tale-card">
+          <!-- <img v-if="tale.account.coverImageCid" :src="`https://gateway.pinata.cloud/ipfs/${tale.account.coverImageCid}`" @error="setDefaultImage" alt="Tale Cover" class="tale-cover-image"/> -->
+          <!-- <img v-else src="https://placehold.co/600x400/gray/white?text=No+Image" alt="Default Tale Cover" class="tale-cover-image"/> -->
+          <div class="tale-card-content">
+            <h3 class="tale-title">{{ creator.name}}</h3>
+            <p class="tale-meta">Story: {{ creator.storyCount }}</p>
+            <p class="tale-meta">NFT: {{ creator.nftCount }}</p>
+            <div class="tale-tags">
+                </div>
+            <button @click="openPreviewModal(tale)" class="btn btn-info read-more-button">
+              Read Preview
+            </button>
+          </div>
+        </div>
     </section>
 
     <div v-if="viewingTale" class="modal-overlay">
@@ -102,15 +118,18 @@ const SOLANA_RPC_URL = import.meta.env.VITE_RPC_ENDPOINT || 'https://api.devnet.
 import idlFromFile from '../anchor/tale_story' // Adjust path as necessary
 const PROGRAM_ID = new PublicKey("HoSn8RTHXrJmTgw5Wc6XMQDDVdvhuj2VUg6HVtVtPjXe"); // Your Program ID
 const idl = idlFromFile;
-
+import idlFromFileNft from '../anchor/tale_nft' // Adjust path as necessary
+const READIUM_FUN_PROGRAM_ID_NFT = new PublicKey("DJgfvt8jXgkXXkRx7CaFa9FJSXbcc1SALnfyCdXHZR1j"); // Your Program ID from IDL
+const idlNft = idlFromFileNft
 // --- Wallet and Program ---
 const wallet = useWallet();
 const connection = new Connection(SOLANA_RPC_URL, "confirmed");
 let provider;
 let program;
-
+let programNft;
 // --- Component State ---
 const appUser = ref(null);
+const listUser = ref(null)
 const isLoadingUser = ref(false);
 const allOnChainTales = ref([]); // Stores all tales fetched
 const isLoadingTales = ref(false);
@@ -118,12 +137,46 @@ const viewingTale = ref(null);
 const fetchedIpfsContent = ref('');
 const ipfsContentLoading = ref(false);
 const ipfsContentError = ref('');
+const listEpisode = ref(null)
 const uiMessage = ref({ text: '', type: 'info' });
 
 // --- Computed Properties ---
 const publishedTales = computed(() => {
   return allOnChainTales.value.filter(tale => tale.account.status === 1); // 1 for Published
 });
+
+
+const creator = computed(()=>{
+  const list = listUser?.value?.filter(user => user.type === 'creator')
+  
+  const result_functional = list?.map(item_a => {
+  // 1. Find relevant items from items_c based on item_a.walletAddress
+  const relevant_c_items = publishedTales?.value?.filter(item_c => item_c.account.author.toString() === item_a.walletAddress);
+  
+  // The count for the 'json_c_functional' field in the output
+  const count_for_output_c = relevant_c_items?.length;
+
+  // 2. Find relevant items from items_b based on the relevant_c_items
+  let count_for_output_b = 0;
+  
+  relevant_c_items?.forEach(relevant_c_item => {
+    const related_b_items_for_this_c = listEpisode.value?.filter(item_b => 
+      item_b.account.parentTale.toString() === relevant_c_item.publicKey.toString() && item_b.account.isNft
+    );
+    count_for_output_b += related_b_items_for_this_c.length;
+  });
+
+  return {
+    _id: item_a._id,
+    walletAddress: item_a.walletAddress,
+    storyCount: count_for_output_c, // Name from your 'iwant' example
+    nftCount: count_for_output_b,  // Name from your 'iwant' example
+    ...item_a
+  };
+});
+  // const episode = listEpisode.value.map(episode => list.map(user => user.walletAddress))
+  return result_functional
+})
 
 // --- Watcher for wallet connection ---
 watch(() => wallet.connected.value, (isConnected, wasConnected) => {
@@ -132,7 +185,8 @@ watch(() => wallet.connected.value, (isConnected, wasConnected) => {
         if (wallet.wallet.value && wallet.wallet.value.adapter) {
              provider = new AnchorProvider(connection, wallet.wallet.value.adapter, AnchorProvider.defaultOptions());
              try {
-              program = new Program(idl, provider);
+                program = new Program(idl, provider);
+                programNft = new Program(idlNft,provider)
                 console.log("HomeView: Anchor Program Initialized.");
              } catch (e) {
                 console.error("HomeView: Error initializing Anchor Program:", e);
@@ -189,6 +243,18 @@ async function fetchAppUser() {
   }
 }
 
+async function fetchUser() {
+  try {
+    const response = await authApiClient.get('/users');
+    listUser.value = response.data.success ? response.data.data : null
+  } catch (error) {
+    console.error("HomeView: Failed to fetch app user:", error);
+    // appUser.value = null; localStorage.removeItem(JWT_TOKEN_KEY);
+  } finally {
+    isLoadingUser.value = false;
+  }
+}
+
 async function fetchPublishedOnChainTales() {
   if (!program) {
     if (wallet.connected.value) showUiMessage("On-chain program not ready.", "warning");
@@ -198,6 +264,8 @@ async function fetchPublishedOnChainTales() {
   isLoadingTales.value = true;
   try {
     const accounts = await program.account.tale.all();
+    const nft = await program.account.episode.all();
+    listEpisode.value = nft
     // Filter for published tales (status === 1) client-side
     allOnChainTales.value = accounts
         // .filter(tale => tale.account.status === 1) // Filter for published status
@@ -255,6 +323,7 @@ watch(() => wallet.publicKey.value, (newVal, oldVal) => {
 
 onMounted(() => {
   fetchAppUser(); // Fetch user on mount
+  fetchUser()
   // fetchPublishedOnChainTales is called by the wallet watcher when program is ready
 });
 
