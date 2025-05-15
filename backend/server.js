@@ -20,11 +20,32 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 // CORS Configuration (adjust origin for production)
-app.use(cors({
-    origin: process.env.FRONTEND_URL || '*', // Be more specific in production
-    methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
-    credentials: true,
-}));
+const allowedOrigins = [
+    process.env.FRONTEND_URL, // Your deployed frontend URL (e.g., https://your-frontend.vercel.app)
+    'http://localhost:5173',  // Your local Vue development URL (if you use Vite's default)
+    'http://localhost:3000',  // If your frontend runs on 3000 sometimes
+    // Add any other origins you need to allow (e.g., preview deployment URLs)
+  ].filter(Boolean); // Filter out undefined values if FRONTEND_URL is not set
+  
+  console.log("Allowed CORS origins:", allowedOrigins); // For debugging
+  
+  const corsOptions = {
+    origin: function (origin, callback) {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.indexOf(origin) === -1) {
+        const msg = `The CORS policy for this site does not allow access from the specified Origin: ${origin}`;
+        console.error(msg); // Log denied origins
+        return callback(new Error(msg), false);
+      }
+      return callback(null, true);
+    },
+    credentials: true, // Important if your frontend needs to send cookies or Authorization headers
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'], // Specify allowed methods
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'], // Specify allowed headers
+  };
+  
+app.use(cors(corsOptions));
 app.use(bodyParser.json());
 
 // // Rate Limiter (apply to all requests, or specific routes)
