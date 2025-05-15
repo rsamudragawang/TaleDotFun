@@ -12,6 +12,7 @@ const userRoutes = require('./routes/userRoutes');
 const taleRoutes = require('./routes/taleRoutes');
 const { taleNestedEpisodeRouter, individualEpisodeRouter } = require('./routes/episodeRoutes'); // <--- ADD THIS
 const mintActivityRoutes = require('./routes/mintActivityRoutes'); // <-- IMPORT NEW ROUTES
+const ipfsRoutes = require('./routes/ipfsRoutes'); // Add this
 
 // Initialize Express app
 const app = express();
@@ -77,6 +78,7 @@ app.use('/api/users', userRoutes);   // <--- ADD THIS: Mount user routes
 app.use('/api/tales', taleRoutes);   // <--- ADD THIS: Mount tale routes
 app.use('/api/episodes', individualEpisodeRouter); // <--- ADD THIS for /api/episodes/:episodeId routes
 app.use('/api/mint-activities', mintActivityRoutes); // <-- USE NEW ROUTES
+app.use('/api/ipfs', ipfsRoutes); // Add this line
 
 // Basic root route for health checks
 app.get('/', (req, res) => {

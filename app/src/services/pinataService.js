@@ -1,131 +1,97 @@
+// readium-fun/app/src/services/pinataService.js
 import axios from 'axios';
-import FormData from 'form-data';
 
-const PINATA_API_KEY = import.meta.env.VITE_PINATA_API_KEY;
-const PINATA_SECRET_API_KEY = import.meta.env.VITE_PINATA_SECRET_API_KEY;
-const PINATA_BASE_URL = 'https://api.pinata.cloud';
+// The base URL for your backend API, which will proxy to Pinata
+const BACKEND_API_BASE_URL = import.meta.env.VITE_APP_AUTH_API_URL || 'http://localhost:3000/api';
+const JWT_TOKEN_KEY = 'readium_fun_jwt_token'; // If your backend IPFS routes are protected
 
+// Configure an Axios instance for calls to your backend IPFS routes
+const backendIpfsClient = axios.create({
+  baseURL: `${BACKEND_API_BASE_URL}/ipfs`, // Assuming your routes are mounted at /api/ipfs
+});
+
+backendIpfsClient.interceptors.request.use(config => {
+  const token = localStorage.getItem(JWT_TOKEN_KEY);
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+/**
+ * Uploads a file to IPFS by sending it to the backend.
+ * @param {File} file - The file object to upload.
+ * @returns {Promise<object>} Backend response, expected to include { success, ipfsHash, imageUrl, ... }.
+ */
 export const uploadFileToIPFS = async (file) => {
-  const formData = new FormData();
-  formData.append('file', file);
+  if (!file) {
+    return { success: false, error: 'No file provided for upload.' };
+  }
 
-  const metadata = JSON.stringify({
-    name: file.name,
-  });
-  formData.append('pinataMetadata', metadata);
+  const formData = new FormData(); // Native browser FormData
+  formData.append('file', file, file.name); // 'file' must match multer field name in backend
 
   try {
-    const response = await axios.post(`${PINATA_BASE_URL}/pinning/pinFileToIPFS`, formData, {
+    const response = await backendIpfsClient.post('/upload-file', formData, {
       headers: {
-        'Content-Type': `multipart/form-data; boundary=${formData._boundary}`,
-        'pinata_api_key': PINATA_API_KEY,
-        'pinata_secret_api_key': PINATA_SECRET_API_KEY,
+        'Content-Type': 'multipart/form-data', // Important for file uploads
       },
     });
-
-    return {
-      success: true,
-      ipfsHash: response.data.IpfsHash,
-      imageUrl: `https://gateway.pinata.cloud/ipfs/${response.data.IpfsHash}`,
-    };
+    // Assuming backend returns: { success: true, ipfsHash: '...', imageUrl: '...' }
+    return response.data; 
   } catch (error) {
-    console.error('Error uploading file to IPFS:', error);
+    console.error('Error uploading file via backend:', error.response?.data || error.message);
     return {
       success: false,
-      error: error.message,
+      error: error.response?.data?.message || error.message || 'Failed to upload file via backend.',
     };
   }
 };
 
-export const uploadJsonToIPFS = async (jsonData) => {
+/**
+ * Uploads JSON data to IPFS by sending it to the backend.
+ * @param {object} jsonData - The JSON data to upload.
+ * @param {string} [name] - Optional name for the pinned JSON (backend can handle default).
+ * @returns {Promise<object>} Backend response.
+ */
+export const uploadJsonToIPFS = async (jsonData, name) => {
+  if (!jsonData || typeof jsonData !== 'object') {
+    return { success: false, error: 'jsonData (object) is required.' };
+  }
   try {
-    const response = await axios.post(`${PINATA_BASE_URL}/pinning/pinJSONToIPFS`, jsonData, {
-      headers: {
-        'Content-Type': 'application/json',
-        'pinata_api_key': PINATA_API_KEY,
-        'pinata_secret_api_key': PINATA_SECRET_API_KEY,
-      },
-    });
-
-    return {
-      success: true,
-      ipfsHash: response.data.IpfsHash,
-      metadataUrl: `https://gateway.pinata.cloud/ipfs/${response.data.IpfsHash}`,
-    };
+    const payload = { jsonData, name };
+    const response = await backendIpfsClient.post('/upload-json', payload);
+    // Assuming backend returns: { success: true, ipfsHash: '...', metadataUrl: '...' }
+    return response.data;
   } catch (error) {
-    console.error('Error uploading JSON to IPFS:', error);
+    console.error('Error uploading JSON via backend:', error.response?.data || error.message);
     return {
       success: false,
-      error: error.message,
+      error: error.response?.data?.message || error.message || 'Failed to upload JSON via backend.',
     };
   }
 };
 
-
+/**
+ * Uploads a string of text (as a file) to IPFS by sending it to the backend.
+ * @param {string} textData - The text content to upload.
+ * @param {string} fileName - The desired filename for the content on IPFS.
+ * @returns {Promise<object>} Backend response.
+ */
 export const uploadTextToIPFS = async (textData, fileName) => {
-  if (!PINATA_API_KEY || !PINATA_SECRET_API_KEY) {
-    console.error('Pinata API Key or Secret not configured for text upload.');
-    return { success: false, error: 'Pinata API Key or Secret not configured.' };
+  if (typeof textData !== 'string' || !fileName) {
+    return { success: false, error: 'textData (string) and fileName are required.' };
   }
-
-  if (typeof textData !== 'string') {
-    return { success: false, error: 'Invalid textData: Input must be a string.' };
-  }
-  if (!fileName || typeof fileName !== 'string') {
-    return { success: false, error: 'Invalid fileName: A string filename is required.' };
-  }
-
   try {
-    // Determine content type based on filename extension, default to text/plain
-    let contentType = 'text/plain';
-    if (fileName.endsWith('.md')) {
-      contentType = 'text/markdown';
-    } else if (fileName.endsWith('.json')) {
-      contentType = 'application/json';
-    } else if (fileName.endsWith('.txt')) {
-      contentType = 'text/plain';
-    }
-    // Add more types as needed
-
-    // Create a Blob from the text data
-    const textBlob = new Blob([textData], { type: contentType });
-
-    // Prepare FormData
-    const formData = new FormData();
-    formData.append('file', textBlob, fileName); // Pass the Blob and desired filename
-
-    const metadata = JSON.stringify({
-      name: fileName, // Use the provided filename for Pinata metadata
-      // keyvalues: { source: 'textUploadFunction' } // Optional custom keyvalues
-    });
-    formData.append('pinataMetadata', metadata);
-
-    const options = JSON.stringify({
-      cidVersion: 0, // Or 1, text files can often benefit from CIDv0 for wider compatibility
-    });
-    formData.append('pinataOptions', options);
-
-    // Make the API call
-    const response = await axios.post(`${PINATA_BASE_URL}/pinning/pinFileToIPFS`, formData, {
-      maxBodyLength: Infinity,
-      headers: {
-        // Let Axios set the Content-Type with boundary for FormData
-        'pinata_api_key': PINATA_API_KEY,
-        'pinata_secret_api_key': PINATA_SECRET_API_KEY,
-      },
-    });
-
-    return {
-      success: true,
-      ipfsHash: response.data.IpfsHash,
-      fileUrl: `https://gateway.pinata.cloud/ipfs/${response.data.IpfsHash}`,
-    };
-
+    const payload = { textData, fileName };
+    const response = await backendIpfsClient.post('/upload-text', payload);
+    // Assuming backend returns: { success: true, ipfsHash: '...', fileUrl: '...' }
+    return response.data;
   } catch (error) {
-    console.error(`Error uploading text file "${fileName}" to IPFS:`, error.response?.data || error.message);
+    console.error('Error uploading text via backend:', error.response?.data || error.message);
     return {
       success: false,
-      error: error.response?.data?.error || error.message || `Failed to upload text file "${fileName}" to IPFS.`,
+      error: error.response?.data?.message || error.message || 'Failed to upload text via backend.',
     };
   }
 };
