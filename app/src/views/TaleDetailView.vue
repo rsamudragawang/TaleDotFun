@@ -77,7 +77,7 @@ const AUTH_API_BASE_URL = TALES_API_BASE_URL;
 const JWT_TOKEN_KEY = 'readium_fun_jwt_token';
 const SOLANA_RPC_URL = import.meta.env.VITE_RPC_ENDPOINT || 'https://api.devnet.solana.com';
 
-import idl from './readium_fun.json'
+import idlFromFile from './readium_fun.json'
 const PROGRAM_ID = new PublicKey("EynuKneQ6RX5AAUY8E6Lq6WvNrUVY2F3C8TcFNB7MYh8");
 const idl = idlFromFile;
 
