@@ -100,7 +100,7 @@ const SOLANA_RPC_URL = import.meta.env.VITE_RPC_ENDPOINT || 'https://api.devnet.
 
 // **IMPORTANT**: Import your actual IDL file.
 import idlFromFile from '../anchor/tale_story' // Adjust path as necessary
-const PROGRAM_ID = new PublicKey("Bm3TKKmR1dqwmNxAhQAJ6V6pdTZgykMVzxL2q2eVKqkQ"); // Your Program ID
+const PROGRAM_ID = new PublicKey("HoSn8RTHXrJmTgw5Wc6XMQDDVdvhuj2VUg6HVtVtPjXe"); // Your Program ID
 const idl = idlFromFile;
 
 // --- Wallet and Program ---

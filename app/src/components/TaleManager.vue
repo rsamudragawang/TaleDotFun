@@ -155,7 +155,7 @@ const SOLANA_RPC_URL = import.meta.env.VITE_RPC_ENDPOINT || 'https://api.devnet.
 import idlFromFile from '../anchor/tale_story' // Adjust path as necessary
 // Then use: const idl = idlFromFile;
 // The PROGRAM_ID must also match the "address" in your IDL's metadata.
-const PROGRAM_ID = new PublicKey("Bm3TKKmR1dqwmNxAhQAJ6V6pdTZgykMVzxL2q2eVKqkQ"); // Updated to your IDL's address
+const PROGRAM_ID = new PublicKey("HoSn8RTHXrJmTgw5Wc6XMQDDVdvhuj2VUg6HVtVtPjXe"); // Updated to your IDL's address
 
 // const idl = { // This is now structured based on your provided idl.json
 //   "address": "EynuKneQ6RX5AAUY8E6Lq6WvNrUVY2F3C8TcFNB7MYh8",
