@@ -6,7 +6,9 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-
+tale_governance = "9WKwPk4miSCtcGHFP64CVUyhAZWy4ojqtWcAzv3KKcXJ"
+tale_nft = "J6X9pPHtpvm25XDzi8vzDXgnRUTc4puf499H5Y1z6F7b"
+tale_story = "Bm3TKKmR1dqwmNxAhQAJ6V6pdTZgykMVzxL2q2eVKqkQ"
 
 [registry]
 url = "https://api.apr.dev"
