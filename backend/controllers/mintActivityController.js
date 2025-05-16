@@ -160,3 +160,25 @@ exports.getAllMintActivities = async (req, res, next) => {
         next(error);
     }
 };
+
+// @desc    Get all public/ready mint activities (for public display)
+// @route   GET /api/mint-activities/public
+// @access  Public
+exports.getPublicMintActivities = async (req, res, next) => {
+    try {
+        const activities = await MintActivity.find({})
+            .populate('user', 'name walletAddress type')
+            .populate('episode', 'episodeName')
+            .populate('tale', 'title')
+            .sort({ mintedAt: -1 });
+
+        res.status(200).json({
+            success: true,
+            count: activities.length,
+            data: activities,
+        });
+    } catch (error) {
+        console.error('Error fetching public mint activities:', error);
+        next(error);
+    }
+};

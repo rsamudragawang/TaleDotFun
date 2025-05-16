@@ -242,6 +242,53 @@
             </button>
           </div>
         </div>
+
+       
+      </div>
+      <div v-for="creator in creator" :key="creator._id" class="tale-card">
+          <!-- <img v-if="tale.account.coverImageCid" :src="`https://gateway.pinata.cloud/ipfs/${tale.account.coverImageCid}`" @error="setDefaultImage" alt="Tale Cover" class="tale-cover-image"/> -->
+          <!-- <img v-else src="https://placehold.co/600x400/gray/white?text=No+Image" alt="Default Tale Cover" class="tale-cover-image"/> -->
+          <div class="tale-card-content">
+            <h3 class="tale-title">{{ creator.name}}</h3>
+            <p class="tale-meta">Story: {{ creator.storyCount }}</p>
+            <p class="tale-meta">NFT: {{ creator.nftCount }}</p>
+            <div class="tale-tags">
+                </div>
+            <button @click="openPreviewModal(tale)" class="btn btn-info read-more-button">
+              Read Preview
+            </button>
+          </div>
+        </div>
+    </section>
+
+    <section class="inspired-nfts-section" style="margin-top: 3rem;">
+      <h2 class="section-title">Get Inspired by Other Creators</h2>
+      <div v-if="isLoadingInspiredNfts" class="loading-indicator">
+        <div class="spinner"></div>
+        <p>Loading NFTs...</p>
+      </div>
+      <div v-else-if="inspiredNftsError" class="error-box">{{ inspiredNftsError }}</div>
+      <div v-else-if="inspiredNfts.length === 0" class="info-box no-tales-info">
+        No NFTs have been minted yet.
+      </div>
+      <div v-else class="inspired-nfts-grid">
+        <NFTCard
+          v-for="nft in inspiredNfts"
+          :key="nft.nftMintAddress"
+          :nft="{
+            mint: nft.nftMintAddress,
+            name: nft.tale?.title || nft.episode?.episodeName || 'Untitled',
+            description: nft.tale?.description || '',
+            metadata: { image: nft.tale?.coverImage || '' },
+            creator: nft.user?.name || nft.userWalletAddress,
+            price: nft.price || null
+          }"
+          :showBuyButton="false"
+        >
+          <template #actions>
+            <button class="btn btn-info w-full mt-2">Mint & Get Special Access</button>
+          </template>
+        </NFTCard>
       </div>
     </section>
 
@@ -289,6 +336,9 @@ import { Connection, PublicKey } from '@solana/web3.js';
 import { Program, AnchorProvider } from '@coral-xyz/anchor';
 import axios from 'axios';
 import { marked } from 'marked';
+import NFTCard from '../components/NFTCard.vue';
+import apiService from '../services/apiService';
+import taleNftIdl from '../anchor/tale_nft.json';
 
 // --- Configuration ---
 const AUTH_API_BASE_URL = import.meta.env.VITE_APP_AUTH_API_URL || 'http://localhost:3000/api';
@@ -299,15 +349,18 @@ const SOLANA_RPC_URL = import.meta.env.VITE_RPC_ENDPOINT || 'https://api.devnet.
 import idlFromFile from '../anchor/tale_story' // Adjust path as necessary
 const PROGRAM_ID = new PublicKey("HoSn8RTHXrJmTgw5Wc6XMQDDVdvhuj2VUg6HVtVtPjXe"); // Your Program ID
 const idl = idlFromFile;
-
+import idlFromFileNft from '../anchor/tale_nft' // Adjust path as necessary
+const READIUM_FUN_PROGRAM_ID_NFT = new PublicKey("DJgfvt8jXgkXXkRx7CaFa9FJSXbcc1SALnfyCdXHZR1j"); // Your Program ID from IDL
+const idlNft = idlFromFileNft
 // --- Wallet and Program ---
 const wallet = useWallet();
 const connection = new Connection(SOLANA_RPC_URL, "confirmed");
 let provider;
 let program;
-
+let programNft;
 // --- Component State ---
 const appUser = ref(null);
+const listUser = ref(null)
 const isLoadingUser = ref(false);
 const allOnChainTales = ref([]); // Stores all tales fetched
 const isLoadingTales = ref(false);
@@ -315,6 +368,7 @@ const viewingTale = ref(null);
 const fetchedIpfsContent = ref('');
 const ipfsContentLoading = ref(false);
 const ipfsContentError = ref('');
+const listEpisode = ref(null)
 const uiMessage = ref({ text: '', type: 'info' });
 const activeTab = ref(0);
 const responsiveOptions = ref([
@@ -339,11 +393,47 @@ const responsiveOptions = ref([
     numScroll: 1
   }
 ]);
+const inspiredNfts = ref([]);
+const isLoadingInspiredNfts = ref(false);
+const inspiredNftsError = ref('');
 
 // --- Computed Properties ---
 const publishedTales = computed(() => {
   return allOnChainTales.value.filter(tale => tale.account.status === 1); // 1 for Published
 });
+
+
+const creator = computed(()=>{
+  const list = listUser?.value?.filter(user => user.type === 'creator')
+  
+  const result_functional = list?.map(item_a => {
+  // 1. Find relevant items from items_c based on item_a.walletAddress
+  const relevant_c_items = publishedTales?.value?.filter(item_c => item_c.account.author.toString() === item_a.walletAddress);
+  
+  // The count for the 'json_c_functional' field in the output
+  const count_for_output_c = relevant_c_items?.length;
+
+  // 2. Find relevant items from items_b based on the relevant_c_items
+  let count_for_output_b = 0;
+  
+  relevant_c_items?.forEach(relevant_c_item => {
+    const related_b_items_for_this_c = listEpisode.value?.filter(item_b => 
+      item_b.account.parentTale.toString() === relevant_c_item.publicKey.toString() && item_b.account.isNft
+    );
+    count_for_output_b += related_b_items_for_this_c.length;
+  });
+
+  return {
+    _id: item_a._id,
+    walletAddress: item_a.walletAddress,
+    storyCount: count_for_output_c, // Name from your 'iwant' example
+    nftCount: count_for_output_b,  // Name from your 'iwant' example
+    ...item_a
+  };
+});
+  // const episode = listEpisode.value.map(episode => list.map(user => user.walletAddress))
+  return result_functional
+})
 
 // --- Watcher for wallet connection ---
 watch(() => wallet.connected.value, (isConnected, wasConnected) => {
@@ -409,6 +499,18 @@ async function fetchAppUser() {
   }
 }
 
+async function fetchUser() {
+  try {
+    const response = await authApiClient.get('/users');
+    listUser.value = response.data.success ? response.data.data : null
+  } catch (error) {
+    console.error("HomeView: Failed to fetch app user:", error);
+    // appUser.value = null; localStorage.removeItem(JWT_TOKEN_KEY);
+  } finally {
+    isLoadingUser.value = false;
+  }
+}
+
 async function fetchPublishedOnChainTales() {
   if (!program) {
     if (wallet.connected.value) showUiMessage("On-chain program not ready.", "warning");
@@ -418,6 +520,8 @@ async function fetchPublishedOnChainTales() {
   isLoadingTales.value = true;
   try {
     const accounts = await program.account.tale.all();
+    const nft = await program.account.episode.all();
+    listEpisode.value = nft
     // Filter for published tales (status === 1) client-side
     allOnChainTales.value = accounts
       // .filter(tale => tale.account.status === 1) // Filter for published status
@@ -466,6 +570,45 @@ function navigateToTaleDetailAndCloseModal(taleIdOnChain) { // taleIdOnChain is 
   router.push({ name: 'TaleDetail', params: { id: taleIdOnChain } });
 }
 
+// --- On-chain MintActivity Fetch ---
+async function fetchInspiredNftsOnChain() {
+  isLoadingInspiredNfts.value = true;
+  inspiredNftsError.value = '';
+  try {
+    // Use a read-only provider (no wallet needed for fetching)
+    const readOnlyProvider = new AnchorProvider(connection, wallet.wallet.value?.adapter || wallet, AnchorProvider.defaultOptions());
+    console.log("Tale NFT Program ID:", taleNftIdl);
+    
+    const taleNftProgram = new Program(taleNftIdl, readOnlyProvider);
+
+    // Fetch all MintActivity accounts on-chain
+    const mintActivities = await taleNftProgram.account.mintActivity.all();
+
+    console.log("Mint Activities:", mintActivities);
+    
+
+    // Optionally filter for only public/ready NFTs (status === 1)
+    const publicNfts = mintActivities.filter(item => item.account.status === 1);
+
+    // Map to your NFTCard format
+    inspiredNfts.value = publicNfts.map(item => ({
+      mint: item.account.nftMintAddress.toString(),
+      name: 'Minted NFT', // TODO: Fetch real name from NFT metadata if needed
+      description: `Minted by: ${item.account.userWallet.toString()}`,
+      metadata: { image: '' }, // TODO: Fetch image from NFT metadata if needed
+      creator: item.account.userWallet.toString(),
+      candyMachineId: item.account.candyMachineId.toString(),
+      status: item.account.status,
+      timestamp: item.account.timestamp,
+      transactionSignature: item.account.transactionSignature,
+    }));
+  } catch (e) {
+    inspiredNftsError.value = e.message || 'Failed to fetch NFTs from chain.';
+  } finally {
+    isLoadingInspiredNfts.value = false;
+  }
+}
+
 // --- Lifecycle Hooks ---
 watch(() => wallet.publicKey.value, (newVal, oldVal) => {
   if (newVal?.toBase58() !== oldVal?.toBase58()) {
@@ -475,6 +618,8 @@ watch(() => wallet.publicKey.value, (newVal, oldVal) => {
 
 onMounted(() => {
   fetchAppUser(); // Fetch user on mount
+  fetchUser()
+  fetchInspiredNftsOnChain();
   // fetchPublishedOnChainTales is called by the wallet watcher when program is ready
 });
 
@@ -1075,4 +1220,24 @@ onMounted(() => {
   color: #fca5a5;
   border-color: rgba(220, 38, 38, 0.5);
 }
+
+.inspired-nfts-section {
+  margin-bottom: 2.5rem;
+}
+.inspired-nfts-grid {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+@media (min-width: 768px) {
+  .inspired-nfts-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1024px) {
+  .inspired-nfts-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 </style>

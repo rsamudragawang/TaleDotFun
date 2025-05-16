@@ -149,4 +149,12 @@ export default {
   //   return apiClient.patch(`/simple-listings/${listingStatePda}/status`, { status, ...details });
   // }
 
+  /**
+   * Fetches all public/ready mint activities (NFTs) for public display.
+   * @returns {Promise<Array<object>>} Array of public MintActivity objects.
+   */
+  getPublicMintActivities() {
+    return apiClient.get('/mint-activities/public');
+  },
+
 };

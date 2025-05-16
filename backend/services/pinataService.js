@@ -4,7 +4,7 @@ const FormData = require('form-data'); // Ensure this is the Node.js 'form-data'
 const stream = require('stream');
 
 const PINATA_API_KEY = process.env.PINATA_API_KEY;
-const PINATA_SECRET_API_KEY = process.env.PINATA_SECRET_API_KEY;
+const PINATA_SECRET_API_KEY = process.env.PINATA_API_SECRET;
 // const PINATA_JWT = process.env.PINATA_JWT; // Use JWT if you prefer, otherwise API keys
 
 const PINATA_BASE_URL = 'https://api.pinata.cloud';
