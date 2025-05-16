@@ -25,6 +25,10 @@ const UserSchema = new mongoose.Schema({
   },
   lastLoginAt: {
     type: Date,
+  },
+  avatar: {
+    type: String,
+    default: '', // URL to the avatar image (Pinata/IPFS)
   }
 }, { timestamps: true }); // Adds createdAt and updatedAt
 

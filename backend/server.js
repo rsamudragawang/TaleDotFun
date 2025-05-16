@@ -128,7 +128,7 @@ app.listen(PORT, () => {
     console.log(`Server listening on port ${PORT}`);
     console.log(`MongoDB URI: ${process.env.MONGODB_URI ? 'Loaded' : 'MISSING!'}`);
     console.log(`Pinata API Key: ${process.env.PINATA_API_KEY ? 'Loaded' : 'MISSING!'}`);
-    console.log(`Pinata Secret Key: ${process.env.PINATA_SECRET_API_KEY ? 'Loaded' : 'MISSING!'}`);
+    console.log(`Pinata Secret Key: ${process.env.PINATA_API_SECRET ? 'Loaded' : 'MISSING!'}`);
 });
 
 module.exports = app;
