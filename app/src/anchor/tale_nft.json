@@ -236,14 +236,17 @@
                 "path": "user_wallet"
               },
               {
-                "kind": "arg",
-                "path": "candy_machine_id_arg"
+                "kind": "account",
+                "path": "nft_mint_address"
               }
             ]
           }
         },
         {
-          "name": "nft_mint_address"
+          "name": "nft_mint_address",
+          "docs": [
+            "Make sure this is the actual Mint account of the NFT, not just an arbitrary Pubkey."
+          ]
         },
         {
           "name": "user_wallet",

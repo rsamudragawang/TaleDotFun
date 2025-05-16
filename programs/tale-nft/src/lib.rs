@@ -79,7 +79,7 @@ pub mod tale_nft { // Module name from your IDL
     // --- Existing Mint Activity Instructions (remain unchanged) ---
     pub fn log_mint_activity(
         ctx: Context<LogMintActivity>,
-        candy_machine_id_arg: Pubkey,
+        candy_machine_id_arg: Pubkey, // Still passed as an argument to be stored in the account
         transaction_signature_str: String,
         episode_on_chain_pda_option: Option<Pubkey>,
     ) -> Result<()> {
@@ -89,8 +89,8 @@ pub mod tale_nft { // Module name from your IDL
 
         let activity = &mut ctx.accounts.mint_activity_account;
         activity.user_wallet = *ctx.accounts.user_wallet.key;
-        activity.candy_machine_id = candy_machine_id_arg;
-        activity.nft_mint_address = *ctx.accounts.nft_mint_address.key;
+        activity.candy_machine_id = candy_machine_id_arg; // Store it
+        activity.nft_mint_address = *ctx.accounts.nft_mint_address.key; // This was used in seeds
         activity.transaction_signature = transaction_signature_str;
         activity.episode_on_chain_pda = episode_on_chain_pda_option;
         activity.timestamp = Clock::get()?.unix_timestamp;
@@ -212,7 +212,7 @@ pub mod tale_nft { // Module name from your IDL
 
 // Existing Mint Activity Contexts (remain unchanged)
 #[derive(Accounts)]
-#[instruction(candy_machine_id_arg: Pubkey)]
+// #[instruction(candy_machine_id_arg: Pubkey)]
 pub struct LogMintActivity<'info> {
     #[account(
         init,
@@ -221,15 +221,16 @@ pub struct LogMintActivity<'info> {
         seeds = [
             b"mint_activity".as_ref(),
             user_wallet.key().as_ref(),
-            candy_machine_id_arg.as_ref() // nft_mint_address is AccountInfo here
+            nft_mint_address.key().as_ref() // Use the actual NFT mint address as a seed
         ],
         bump
     )]
     pub mint_activity_account: Account<'info, MintActivity>,
     /// CHECK: This is the account of the minted NFT. We are just storing its address.
-    pub nft_mint_address: AccountInfo<'info>, // This is the NFT that was actually minted
+    /// Make sure this is the actual Mint account of the NFT, not just an arbitrary Pubkey.
+    pub nft_mint_address: AccountInfo<'info>, // The actual NFT that was minted
     #[account(mut)]
-    pub user_wallet: Signer<'info>, // The wallet that performed the mint
+    pub user_wallet: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 

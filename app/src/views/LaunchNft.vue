@@ -49,7 +49,7 @@
                                 class="w-full mt-4" 
                                 severity="secondary"
                                 :loading="nft.isMinting"
-                                :disabled="!nft.itemsRemaining || nft.isMinting"
+                                :disabled="!nft.itemsRemaining || nft.isMinting || !wallet.connected.value"
                                 @click="handleMint(nft, i)"
                             >
                                 {{ getMintButtonText(nft) }}
@@ -68,7 +68,7 @@ import { useRouter } from 'vue-router';
 import { ref, onMounted } from 'vue';
 import { Connection, PublicKey, SystemProgram } from '@solana/web3.js';
 import { Program, AnchorProvider } from '@coral-xyz/anchor';
-import taleNftIdl from '../anchor/tale_nft.json';
+import taleNftIdl from '../anchor/tale_nft.json'; // Ensure this IDL is up-to-date
 import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
 import { 
     mplCandyMachine, 
@@ -81,7 +81,7 @@ import {
     transactionBuilder,
     publicKey as umiPublicKey,
     some as umiSome,
-    sol as umiSol
+    // sol as umiSol // Not directly used for solPayment value construction here
 } from '@metaplex-foundation/umi';
 import { setComputeUnitLimit } from '@metaplex-foundation/mpl-toolbox';
 import { walletAdapterIdentity } from '@metaplex-foundation/umi-signer-wallet-adapters';
@@ -92,7 +92,7 @@ const router = useRouter();
 const wallet = useWallet();
 const SOLANA_RPC_URL = import.meta.env.VITE_RPC_ENDPOINT || 'https://api.devnet.solana.com';
 const AUTH_API_BASE_URL = import.meta.env.VITE_APP_AUTH_API_URL || 'http://localhost:3000/api';
-const TALE_NFT_PROGRAM_ID = new PublicKey(taleNftIdl.address);
+const TALE_NFT_PROGRAM_ID = new PublicKey(taleNftIdl.address); // Ensure taleNftIdl.address is correct
 const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
 const listedNfts = ref([]);
 
@@ -104,7 +104,7 @@ function getMintButtonText(nft) {
 }
 
 async function handleMint(nft, index) {
-    if (!wallet.connected.value) {
+    if (!wallet.connected.value || !wallet.publicKey.value) {
         alert('Please connect your wallet to mint');
         return;
     }
@@ -114,84 +114,81 @@ async function handleMint(nft, index) {
         return;
     }
 
-    try {
-        // Set minting state
-        listedNfts.value[index].isMinting = true;
+    listedNfts.value[index].isMinting = true;
 
-        // Initialize UMI
+    try {
         const umi = createUmi(SOLANA_RPC_URL)
             .use(walletAdapterIdentity(wallet.wallet.value.adapter))
             .use(mplCandyMachine());
 
-        // Fetch Candy Machine
         const candyMachine = await fetchCandyMachine(
             umi,
             umiPublicKey(nft.candyMachineAddress)
         );
 
-        // Fetch Candy Guard
         const candyGuard = await fetchCandyGuard(
             umi,
             candyMachine.mintAuthority
         );
 
-        // Generate NFT mint signer
-        const nftMint = generateSigner(umi);
+        const nftMintSigner = generateSigner(umi);
 
-        // Create mint transaction
         const builder = transactionBuilder()
             .add(setComputeUnitLimit(umi, { units: 800_000 }))
             .add(
                 mintV2(umi, {
                     candyMachine: candyMachine.publicKey,
-                    nftMint,
+                    nftMint: nftMintSigner,
                     collectionMint: candyMachine.collectionMint,
                     collectionUpdateAuthority: candyMachine.authority,
-                    candyGuard: candyGuard?.publicKey,
+                    candyGuard: candyGuard.publicKey, // candyGuard should always exist for v2 mint
                     mintArgs: {
                         solPayment: umiSome({ destination: candyGuard.guards.solPayment.value.destination }),
+                        // Add other guard arguments if needed, e.g., for tokenPayment, allowList, etc.
                     },
                 })
             );
 
-        // Send and confirm transaction
         const result = await builder.sendAndConfirm(umi, {
             confirm: { commitment: 'confirmed' }
         });
 
-        // Convert UMI public key to web3.js PublicKey for mint activity logging
-        const nftMintWeb3 = new PublicKey(nftMint.publicKey.toString());
+        const nftMintWeb3 = new PublicKey(nftMintSigner.publicKey.toString());
         const userWalletWeb3 = new PublicKey(wallet.publicKey.value.toString());
+        const candyMachineIdWeb3 = new PublicKey(candyMachine.publicKey.toString());
 
-        // Log mint activity on-chain
-        const provider = new AnchorProvider(connection, wallet.wallet.value.adapter, AnchorProvider.defaultOptions());
-        const program = new Program(taleNftIdl, provider);
 
-        const [mintActivityPDA] = await PublicKey.findProgramAddress(
-            [
-                Buffer.from("mint_activity"),
-                userWalletWeb3.toBuffer(),
-                nftMintWeb3.toBuffer()
-            ],
-            TALE_NFT_PROGRAM_ID
-        );
-
-        console.log("mintActivityPDA", mintActivityPDA.toString());
-
-        console.log({
-            candyMachine: candyMachine.publicKey.toString(),
-            nftMint: nftMintWeb3.toString(),
-            userWallet: userWalletWeb3.toString(),
-            mintActivityPDA: mintActivityPDA.toString(),
-            result: result.signature
-        });
+        // Correct PDA derivation for mint_activity_account
+        const [mintActivityPDA, _mintActivityBump] = await PublicKey.findProgramAddress(
+        [
+            Buffer.from("mint_activity"),
+            userWalletWeb3.toBuffer(),
+            nftMintWeb3.toBuffer() // <--- Use the unique NFT mint address here
+        ],
+        TALE_NFT_PROGRAM_ID
+    );
         
+        console.log("Derived mintActivityPDA:", mintActivityPDA.toString());
+        console.log("Using candyMachineId for PDA seed:", candyMachineIdWeb3.toString());
+        console.log("Calling logMintActivity with arguments:");
+        console.log("  candy_machine_id_arg:", candyMachineIdWeb3.toString());
+        console.log("  transaction_signature_str:", result.signature.toString()); // Ensure it's a string
+        console.log("  episode_on_chain_pda_option:", undefined);
+        console.log("Accounts for logMintActivity:");
+        console.log("  mintActivityAccount:", mintActivityPDA.toString());
+        console.log("  nftMintAddress:", nftMintWeb3.toString());
+        console.log("  userWallet:", userWalletWeb3.toString());
+
+
+        const provider = new AnchorProvider(connection, wallet.wallet.value.adapter, AnchorProvider.defaultOptions());
+        const program = new Program(taleNftIdl,  provider);
+
 
         await program.methods
             .logMintActivity(
-                new PublicKey(candyMachine.publicKey.toString()),
-                result.signature,
-                undefined // episodeOnChainPda is optional
+                candyMachineIdWeb3, // candy_machine_id_arg (Pubkey)
+                Buffer.from(result.signature).toString('base64'), // transaction_signature_str (String) - ensure it's correctly formatted if not already a string
+                null // episode_on_chain_pda_option (Option<Pubkey>) - null or undefined for None
             )
             .accounts({
                 mintActivityAccount: mintActivityPDA,
@@ -201,87 +198,93 @@ async function handleMint(nft, index) {
             })
             .rpc();
 
-        // Show success message
-        alert(`Successfully minted NFT! Transaction: ${result.signature}`);
-
-        // Refresh NFT data
+        alert(`Successfully minted NFT! Transaction: ${Buffer.from(result.signature).toString('base64')}`);
         await fetchListedNftsWithMetadata();
 
     } catch (error) {
         console.error('Minting error:', error);
-        alert(`Minting failed: ${error.message}`);
+        let errorMessage = error.message;
+        if (error.logs) {
+            errorMessage += "\nProgram Logs:\n" + error.logs.join("\n");
+        }
+        alert(`Minting failed: ${errorMessage}`);
     } finally {
-        // Reset minting state
         listedNfts.value[index].isMinting = false;
     }
 }
 
 async function fetchListedNftsWithMetadata() {
     try {
-        const provider = new AnchorProvider(connection, {}, AnchorProvider.defaultOptions());
+        // Use a generic provider for read-only operations if wallet not needed
+        const provider = new AnchorProvider(connection, wallet.wallet?.value?.adapter || {publicKey: PublicKey.default, signTransaction: async () => {}, signAllTransactions: async () => {}}, AnchorProvider.defaultOptions());
         const program = new Program(taleNftIdl, provider);
+        
         const allListed = await program.account.listedNft.all();
         const umi = createUmi(SOLANA_RPC_URL).use(mplCandyMachine());
+
         listedNfts.value = await Promise.all(
             allListed.map(async (item) => {
                 let cmData = null;
                 let name = '';
-                let image = '';
+                let image = 'https://placehold.co/326x327'; // Default placeholder
                 let price = null;
                 let itemsAvailable = null;
                 let itemsMinted = null;
                 let itemsRemaining = null;
                 let metadata = null;
+
                 try {
-                    cmData = await fetchCandyMachine(umi, item.account.candyMachineAddress.toString());
-                    console.log("cmData", cmData);
+                    cmData = await fetchCandyMachine(umi, umiPublicKey(item.account.candyMachineAddress.toString()));
                     
                     if (cmData.items && cmData.items.length > 0 && cmData.items[0].name) {
                         name = cmData.items[0].name;
-                    } else if (cmData.collection && typeof cmData.collection === 'string') {
-                        name = cmData.collection;
+                    } else if (cmData.data.name) { // Fallback to candy machine name if item name not found
+                        name = cmData.data.name;
                     }
-                    if (cmData.header && cmData.header.lamports && cmData.header.lamports.basisPoints) {
-                        price = Number(cmData.header.lamports.basisPoints) / 1_000_000_000;
+
+                    // Assuming solPayment guard is present for price
+                    if (cmData.candyGuard && cmData.candyGuard.guards.solPayment.__option === 'Some') {
+                        price = Number(cmData.candyGuard.guards.solPayment.value.lamports.basisPoints) / 1_000_000_000;
+                    } else if (cmData.configLineSettings && cmData.configLineSettings.prefixName){ //legacy
+                        name = cmData.configLineSettings.prefixName;
                     }
+
+
                     itemsAvailable = Number(cmData.data.itemsAvailable);
                     itemsMinted = Number(cmData.itemsRedeemed);
                     itemsRemaining = itemsAvailable - itemsMinted;
+
                     if (cmData.items && cmData.items.length > 0 && cmData.items[0].uri) {
                         try {
-                            const response = await fetch(cmData.items[0].uri);
+                            const response = await fetch(cmData.items[0].uri.replace(/^https?:\/\/arweave.net\//, 'https://ar-io.dev/'));
                             if (response.ok) {
                                 metadata = await response.json();
                                 if (metadata.image) {
-                                    image = metadata.image;
+                                    image = metadata.image.replace(/^https?:\/\/arweave.net\//, 'https://ar-io.dev/');
                                 }
                             }
-                        } catch (err) {
-                            // ignore
+                        } catch (fetchErr) {
+                            console.warn(`Failed to fetch metadata from ${cmData.items[0].uri}`, fetchErr);
                         }
                     }
-                } catch (err) {
-                    // ignore
+                } catch (cmErr) {
+                    console.warn(`Failed to fetch candy machine ${item.account.candyMachineAddress.toString()}`, cmErr);
                 }
-                if (!image) image = 'https://placehold.co/326x327';
-                // Fetch creator info
-                let creatorName = '';
-                let creatorAvatar = '';
+
+                let creatorName = item.account.creatorWallet.toString().substring(0,6) + "...";
+                let creatorAvatar = `https://ui-avatars.com/api/?rounded=true&bold=true&name=${encodeURIComponent(item.account.creatorWallet.toString().substring(0,2))}`;
                 try {
                     const res = await axios.get(`${AUTH_API_BASE_URL}/users/address/${item.account.creatorWallet.toString()}`);
                     if (res.data && res.data.data) {
                         creatorName = res.data.data.name || item.account.creatorWallet.toString();
                         creatorAvatar = res.data.data.avatar || `https://ui-avatars.com/api/?rounded=true&bold=true&name=${encodeURIComponent(creatorName)}`;
-                    } else {
-                        creatorName = item.account.creatorWallet.toString();
-                        creatorAvatar = `https://ui-avatars.com/api/?rounded=true&bold=true&name=${encodeURIComponent(creatorName)}`;
                     }
-                } catch {
-                    creatorName = item.account.creatorWallet.toString();
-                    creatorAvatar = `https://ui-avatars.com/api/?rounded=true&bold=true&name=${encodeURIComponent(creatorName)}`;
+                } catch (axiosErr) {
+                    // Use default if fetching creator profile fails
                 }
+
                 return {
-                    name: name || 'Untitled',
+                    name: name || 'Untitled NFT Collection',
                     image,
                     price,
                     itemsAvailable,
@@ -295,6 +298,7 @@ async function fetchListedNftsWithMetadata() {
             })
         );
     } catch (e) {
+        console.error("Failed to fetch listed NFTs:", e);
         listedNfts.value = [];
     }
 }
@@ -304,5 +308,29 @@ onMounted(() => {
 });
 </script>
 
+<style scoped>
+.home-view {
+    position: relative;
+    /* Ensure other content is above the circle */
+    z-index: 1;
+}
 
-<style scoped></style>
+.circle-bg {
+    position: absolute;
+    top: -200px; /* Adjust as needed */
+    left: 50%;
+    transform: translateX(-50%);
+    width: 800px; /* Adjust as needed */
+    height: 800px; /* Adjust as needed */
+    background-image: radial-gradient(circle, rgba(58, 107, 213, 0.2) 0%, rgba(16, 12, 24, 0) 70%);
+    border-radius: 50%;
+    z-index: 0; /* Behind other content */
+    pointer-events: none; /* Allow clicks to pass through */
+}
+
+/* Ensure content is above the background */
+.flex, .grid {
+    position: relative;
+    z-index: 1;
+}
+</style>
