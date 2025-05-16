@@ -53,7 +53,7 @@
                     <div class="flex-1 flex flex-col gap-1">
                         <label for="description">Mint Price</label>
                         <InputGroup>
-                            <InputNumber name="mintPrice" type="number" placeholder="0.00" class="w-full" />
+                            <InputNumber mode="decimal" name="mintPrice" placeholder="0.00" class="w-full" />
                             <InputGroupAddon>SOL</InputGroupAddon>
                         </InputGroup>
                         <Message v-if="$form.mintPrice?.invalid" severity="error" size="small" variant="simple">{{
