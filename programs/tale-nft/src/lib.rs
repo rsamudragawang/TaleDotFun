@@ -212,7 +212,7 @@ pub mod tale_nft { // Module name from your IDL
 
 // Existing Mint Activity Contexts (remain unchanged)
 #[derive(Accounts)]
-#[instruction(candy_machine_id_arg: Pubkey, transaction_signature_str: String, episode_on_chain_pda_option: Option<Pubkey>)]
+#[instruction(candy_machine_id_arg: Pubkey)]
 pub struct LogMintActivity<'info> {
     #[account(
         init,
@@ -221,7 +221,7 @@ pub struct LogMintActivity<'info> {
         seeds = [
             b"mint_activity".as_ref(),
             user_wallet.key().as_ref(),
-            nft_mint_address.key().as_ref() // nft_mint_address is AccountInfo here
+            candy_machine_id_arg.as_ref() // nft_mint_address is AccountInfo here
         ],
         bump
     )]

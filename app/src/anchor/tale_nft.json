@@ -129,8 +129,8 @@
       "name": "list_nft",
       "docs": [
         "Creates a new listing record for an NFT.",
-        "The `nft_mint_address` is the mint of the actual NFT being listed.",
-        "The `candy_machine_address` is the CM it's associated with."
+        "The nft_mint_address is the mint of the actual NFT being listed.",
+        "The candy_machine_address is the CM it's associated with."
       ],
       "discriminator": [
         88,
@@ -236,8 +236,8 @@
                 "path": "user_wallet"
               },
               {
-                "kind": "account",
-                "path": "nft_mint_address"
+                "kind": "arg",
+                "path": "candy_machine_id_arg"
               }
             ]
           }
@@ -276,8 +276,8 @@
       "name": "unlist_nft",
       "docs": [
         "Removes (unlists) an NFT listing.",
-        "Only the original `creator_wallet` can unlist.",
-        "This closes the `ListedNft` account and returns lamports to the creator."
+        "Only the original creator_wallet can unlist.",
+        "This closes the ListedNft account and returns lamports to the creator."
       ],
       "discriminator": [
         29,
@@ -337,7 +337,7 @@
       "name": "update_listed_nft",
       "docs": [
         "Updates the associated Candy Machine for a listed NFT.",
-        "Only the original `creator_wallet` can update."
+        "Only the original creator_wallet can update."
       ],
       "discriminator": [
         229,
