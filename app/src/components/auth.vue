@@ -48,6 +48,12 @@
     <div v-if="isAuthenticated" class="auth-section welcome-section">
       <h2 class="section-title">Welcome Back!</h2>
       <div v-if="currentUser" class="info-box user-details">
+        <div class="avatar-uploader-wrapper">
+          <AvatarUploader :key="avatarUrl" @file-selected="handleAvatarSelected" />
+          <div v-if="avatarUploading" class="avatar-uploading">Uploading...</div>
+          <div v-if="avatarUploadError" class="avatar-upload-error">{{ avatarUploadError }}</div>
+          <img v-if="currentUser.avatar" :src="avatarUrl" alt="User Avatar" class="current-avatar-img" />
+        </div>
         <p><strong>Name:</strong> {{ currentUser.name }}</p>
         <p><strong>Wallet:</strong> <span class="wallet-address">{{ shortenAddress(currentUser.walletAddress) }}</span></p>
         <p>You are successfully authenticated.</p>
@@ -76,6 +82,7 @@ import { useRouter, useRoute } from 'vue-router';
 import { useWallet, WalletMultiButton } from 'solana-wallets-vue';
 import axios from 'axios';
 import { Buffer } from 'buffer'; // Needed for TextEncoder if running in environment where it's not global
+import AvatarUploader from './AvatarUploader.vue';
 
 const router = useRouter();
 const route = useRoute();
@@ -103,6 +110,13 @@ const userType = ref('user');
 
 // UI Message
 const uiMessage = ref({ text: '', type: 'info' });
+
+// Avatar upload state
+const avatarUploading = ref(false);
+const avatarUploadError = ref('');
+
+// Helper to get avatar URL (IPFS gateway or fallback)
+const avatarUrl = computed(() => currentUser.value?.avatar || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(currentUser.value?.name || 'User'));
 
 function showUiMessage(msg, type = 'info', duration = 4000) {
   uiMessage.value = { text: msg, type };
@@ -323,6 +337,35 @@ onMounted(() => {
   }
   checkExistingSession(); // Check session on component mount
 });
+
+// Handle avatar file selection and upload
+async function handleAvatarSelected(file) {
+  if (!file) return;
+  avatarUploading.value = true;
+  avatarUploadError.value = '';
+  try {
+    const formData = new FormData();
+    formData.append('avatar', file);
+    // Assume backend URL and user ID are available
+    const userId = currentUser.value._id;
+    const res = await axios.put(
+      `${AUTH_API_BASE_URL.replace(/\/api$/, '')}/api/users/${userId}/avatar`,
+      formData,
+      { headers: { Authorization: `Bearer ${token.value}` } }
+    );
+    if (res.data && res.data.success && res.data.data.avatar) {
+      currentUser.value.avatar = res.data.data.avatar;
+      showUiMessage('Avatar updated!', 'success');
+    } else {
+      throw new Error(res.data.message || 'Failed to update avatar');
+    }
+  } catch (err) {
+    avatarUploadError.value = err.message || 'Upload failed';
+    showUiMessage(avatarUploadError.value, 'error');
+  } finally {
+    avatarUploading.value = false;
+  }
+}
 
 </script>
 
@@ -605,6 +648,31 @@ onMounted(() => {
   background-color: rgba(22, 101, 52, 0.3); /* dark:bg-green-700/30 */
   color: #86efac; /* dark:text-green-300 */
   border-color: rgba(34, 197, 94, 0.5); /* dark:border-green-500/50 */
+}
+
+.avatar-uploader-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+.current-avatar-img {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-top: 0.5rem;
+  border: 2px solid #eee;
+}
+.avatar-uploading {
+  color: #4f46e5;
+  font-size: 0.95rem;
+  margin-top: 0.25rem;
+}
+.avatar-upload-error {
+  color: #b91c1c;
+  font-size: 0.95rem;
+  margin-top: 0.25rem;
 }
 
 </style>

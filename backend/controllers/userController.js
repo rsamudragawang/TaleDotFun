@@ -1,5 +1,7 @@
 // readium-fun/backend/controllers/userController.js
 const User = require('../models/User');
+const pinataService = require('../services/pinataService');
+const multer = require('multer');
 
 // @desc    Get all users
 // @access  Private (Admin only)
@@ -116,6 +118,35 @@ exports.deleteUser = async (req, res, next) => {
     if (err.name === 'CastError') {
         return res.status(400).json({ success: false, message: 'Invalid user ID format' });
     }
+    next(err);
+  }
+};
+
+// @desc    Update user avatar
+// @route   PUT /api/users/:id/avatar
+// @access  Private (Admin or user updating their own profile)
+exports.updateUserAvatar = async (req, res, next) => {
+  try {
+    // Only allow the user themselves or admin
+    const userToUpdate = await User.findById(req.params.id);
+    if (!userToUpdate) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    if (req.user.type !== 'admin' && req.user.id !== userToUpdate.id.toString()) {
+      return res.status(403).json({ success: false, message: 'Not authorized to update this user' });
+    }
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No avatar file uploaded.' });
+    }
+    // Upload to Pinata
+    const pinataResult = await pinataService.pinFileBufferToIPFS(req.file.buffer, req.file.originalname, req.file.mimetype);
+    // Use Pinata public gateway for the avatar URL
+    const avatarUrl = `https://gateway.pinata.cloud/ipfs/${pinataResult.IpfsHash}`;
+    userToUpdate.avatar = avatarUrl;
+    await userToUpdate.save();
+    res.status(200).json({ success: true, data: userToUpdate });
+  } catch (err) {
+    console.error('Error in updateUserAvatar:', err.message);
     next(err);
   }
 };
