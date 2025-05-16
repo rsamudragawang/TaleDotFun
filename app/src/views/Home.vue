@@ -617,6 +617,8 @@ async function fetchInspiredNftsOnChain() {
         if (item.account.candyMachineId && item.account.candyMachineId.length > 0) {
           cmData = await fetchCandyMachine(umi, item.account.candyMachineId);
           console.log("cmData", cmData);
+          console.log("candyMachineId", item.account.candyMachineId);
+          
           
           // Name: Prefer item name from CM, fallback to collection name, then episodeName
           if (cmData.items && cmData.items.length > 0 && cmData.items[0].name) {
@@ -633,6 +635,7 @@ async function fetchInspiredNftsOnChain() {
             price = Number(cmData.header.lamports.basisPoints) / 1_000_000_000;
           }
           // Available, Minted, Remaining: use MintComponent logic
+  
             console.log("cmData.data", cmData.data.itemsAvailable, cmData.itemsRedeemed);
             
             itemsAvailable = Number(cmData.data.itemsAvailable);

@@ -63,20 +63,51 @@
             </div>
           </div>
 
-          <fieldset class="form-fieldset nft-gating-fieldset">
-            <legend class="form-legend">NFT Gating (Optional)</legend>
+          <!-- Add Stories Section -->
+          <fieldset class="form-fieldset stories-fieldset">
+            <legend class="form-legend">Select Stories</legend>
+            <div v-if="isLoadingStories" class="loading-indicator">Loading your stories...</div>
+            <div v-else-if="userStories.length === 0" class="info-text">No stories found.</div>
+            <div v-else class="stories-grid">
+              <div v-for="story in userStories" :key="story.publicKey.toBase58()" class="story-checkbox-item">
+                <input
+                  type="checkbox"
+                  :id="'story-' + story.publicKey.toBase58()"
+                  :value="story.publicKey"
+                  v-model="newProposal.selectedStories"
+                  class="story-checkbox"
+                >
+                <label :for="'story-' + story.publicKey.toBase58()" class="story-label">
+                  {{ story.account.title || shortenAddress(story.publicKey.toBase58()) }}
+                </label>
+              </div>
+            </div>
+          </fieldset>
+
+          <!-- Add NFTs Section -->
+          <fieldset class="form-fieldset nfts-fieldset">
+            <legend class="form-legend">NFT Gating</legend>
             <div class="form-group">
-              <label for="nftMint" class="form-label">Candy Machine ID for Gating:</label>
-              <input type="text" id="nftMint" v-model="newProposal.nftMint" class="form-input" placeholder="Enter existing Candy Machine ID">
+              <label for="nftMint" class="form-label">Add Candy Machine ID:</label>
+              <div class="nft-input-group">
+                <input
+                  type="text"
+                  id="nftMint"
+                  v-model="newProposal.nftMint"
+                  class="form-input"
+                  placeholder="Enter Candy Machine ID"
+                >
+                <button type="button" @click="addNftId" class="btn btn-info btn-sm">Add</button>
+              </div>
             </div>
-             <div class="form-group">
-                <label for="nftImageForGating" class="form-label">Image URL for NFTs in New CM (if creating):</label>
-                <input type="url" id="nftImageForGating" v-model="newProposal.nftImageForGating" class="form-input" placeholder="https://example.com/image.png">
-                <small class="form-text">Required if generating a new CM below. This image will be used for all NFTs minted by the new CM.</small>
+            
+            <div v-if="newProposal.nftIds.length > 0" class="nft-list">
+              <h4 class="nft-list-title">Added Candy Machines:</h4>
+              <div v-for="(nftId, index) in newProposal.nftIds" :key="index" class="nft-item">
+                <span class="nft-id">{{ shortenAddress(nftId) }}</span>
+                <button type="button" @click="removeNftId(index)" class="btn btn-danger btn-xs">Remove</button>
+              </div>
             </div>
-            <button type="button" @click="openCMCreatorModal" class="btn btn-info btn-sm" :disabled="!newProposal.nftImageForGating">
-              Generate CM ID via New Candy Machine
-            </button>
           </fieldset>
 
           <div class="form-group two-col">
@@ -126,6 +157,17 @@
             <p class="proposal-detail"><strong>Ends:</strong> {{ formatDateTime(proposal.account.endTime) }}</p>
             <p class="proposal-detail"><strong>Total Participants:</strong> {{ proposal.account.totalParticipants.toString() }}</p>
             <p v-if="proposal.account.nftMint" class="proposal-detail"><strong>Gated by NFT Mint:</strong> {{ shortenAddress(proposal.account.nftMint.toBase58(), 6) }}</p>
+
+            <!-- Vote breakdown section -->
+            <div class="vote-breakdown-section">
+              <h4 class="vote-breakdown-title">Vote Breakdown:</h4>
+              <ul class="vote-breakdown-list">
+                <li v-for="(choice, idx) in proposal.account.choices" :key="idx" class="vote-breakdown-item">
+                  {{ choice }}: {{ proposal.account.totalVotes[idx].toString() }}
+                  ({{ calculatePercentage(proposal.account.totalVotes[idx], proposal.account.totalVotePower) }}%)
+                </li>
+              </ul>
+            </div>
 
             <div v-if="canAttemptVote(proposal.account)" class="vote-section">
               <h4 class="vote-section-title">Cast Your Vote:</h4>
@@ -204,8 +246,11 @@ if (typeof window !== 'undefined' && !window.Buffer) {
 }
 
 import idlFromFile from '../anchor/tale_governance.json';
+import idlStory from '../anchor/tale_story.json';
 const TALE_GOVERNANCE_PROGRAM_ID = new PublicKey(idlFromFile.address);
+const TALE_STORY_PROGRAM_ID = new PublicKey('HoSn8RTHXrJmTgw5Wc6XMQDDVdvhuj2VUg6HVtVtPjXe');
 const idl = idlFromFile;
+const storyIdl = idlStory;
 
 const RPC_ENDPOINT = import.meta.env.VITE_RPC_ENDPOINT || 'https://api.devnet.solana.com';
 const SOLANA_NETWORK = RPC_ENDPOINT.includes('mainnet') ? 'mainnet-beta' : (RPC_ENDPOINT.includes('testnet') ? 'testnet' : 'devnet');
@@ -213,6 +258,7 @@ const SOLANA_NETWORK = RPC_ENDPOINT.includes('mainnet') ? 'mainnet-beta' : (RPC_
 const wallet = useWallet();
 let anchorProvider = null;
 let anchorProgram = null;
+let storyProgram = null;
 
 const uiMessage = ref({ text: '', type: 'info', transactionSignature: null });
 const isLoadingProposals = ref(false);
@@ -232,6 +278,8 @@ const defaultNewProposal = () => ({
   nftVotePower: 1,
   category: 0,
   tagsString: '',
+  selectedStories: [],
+  nftIds: [],
 });
 const newProposal = ref(defaultNewProposal());
 
@@ -248,6 +296,9 @@ const voteCategories = [
 
 const filter = ref({ status: 'All', category: 'All' });
 const showCMCreatorModal = ref(false);
+
+const userStories = ref([]);
+const isLoadingStories = ref(false);
 
 const showUiMessage = (msg, type = 'info', txSig = null, duration = 7000) => {
   uiMessage.value = { text: msg, type, transactionSignature: txSig };
@@ -505,35 +556,49 @@ const handleCreateProposal = async () => {
   if (!anchorProgram || !wallet.publicKey.value) {
     showUiMessage("Wallet not connected or program not initialized.", "error"); return;
   }
-  if (newProposal.value.choices.some(c => !c.trim()) || newProposal.value.choices.length < 2) {
+
+  // Validate choices
+  const validChoices = newProposal.value.choices.filter(c => c.trim());
+  if (validChoices.length < 2) {
     showUiMessage("At least two non-empty choices are required.", "error"); return;
   }
-   if (!newProposal.value.startTime || !newProposal.value.endTime) {
-    showUiMessage("Start and End times are required.", "error");
-    return;
+
+  // Validate times
+  if (!newProposal.value.startTime || !newProposal.value.endTime) {
+    showUiMessage("Start and End times are required.", "error"); return;
   }
   const startDate = new Date(newProposal.value.startTime);
   const endDate = new Date(newProposal.value.endTime);
-
   if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-      showUiMessage("Invalid date format for Start or End time.", "error");
-      return;
+    showUiMessage("Invalid date format for Start or End time.", "error"); return;
   }
-
   const startTime = Math.floor(startDate.getTime() / 1000);
   const endTime = Math.floor(endDate.getTime() / 1000);
-
   if (startTime >= endTime) {
-      showUiMessage("Start time must be before end time.", "error");
-      return;
+    showUiMessage("Start time must be before end time.", "error"); return;
   }
 
+  // Validate vote power
+  if (newProposal.value.regularVotePower <= 0) {
+    showUiMessage("Regular vote power must be greater than 0.", "error"); return;
+  }
+  if (newProposal.value.nftVotePower <= 0) {
+    showUiMessage("NFT vote power must be greater than 0.", "error"); return;
+  }
+
+  // Validate tags
+  const tagsArray = newProposal.value.tagsString.split(',').map(t => t.trim()).filter(t => t);
+  if (tagsArray.length > 5) {
+    showUiMessage("Maximum of 5 tags allowed.", "error"); return;
+  }
+
+  // Generate voting ID
+  const votingId = uuidv4().slice(0, 32); // This ensures length <= 64
 
   isSubmittingProposal.value = true;
   showUiMessage("Submitting proposal...", "loading", null, 0);
 
   try {
-    const votingId = uuidv4().slice(0, 32);
     const creator = wallet.publicKey.value;
 
     const [votePda, voteBump] = await PublicKey.findProgramAddressSync(
@@ -541,35 +606,39 @@ const handleCreateProposal = async () => {
       anchorProgram.programId
     );
     const [voteRecordPda, recordBump] = await PublicKey.findProgramAddressSync(
-        [Buffer.from(utils.bytes.utf8.encode("vote_record")), votePda.toBuffer(), creator.toBuffer()],
-        anchorProgram.programId
+      [Buffer.from(utils.bytes.utf8.encode("vote_record")), votePda.toBuffer(), creator.toBuffer()],
+      anchorProgram.programId
     );
 
-    let nftMintPk = null;
-    if (newProposal.value.nftMint && newProposal.value.nftMint.trim() !== '') {
-        try {
-            nftMintPk = new PublicKey(newProposal.value.nftMint.trim());
-        } catch (e) {
-            showUiMessage("Invalid NFT Mint Address (Candy Machine ID) format.", "error"); isSubmittingProposal.value = false; return;
-        }
-    }
-    const tagsArray = newProposal.value.tagsString.split(',').map(t => t.trim()).filter(t => t).slice(0,5);
+    // Convert selected stories to Pubkeys
+    const selectedStoryPubkeys = newProposal.value.selectedStories.map(story => 
+      typeof story === 'string' ? new PublicKey(story) : story
+    );
+
+    // Validate NFT IDs
+    const validNftIds = newProposal.value.nftIds.filter(id => id.trim());
 
     const txSignature = await anchorProgram.methods
       .createVote(
         votingId,
         newProposal.value.question,
         newProposal.value.description,
-        newProposal.value.choices.filter(c => c.trim()),
+        validChoices,
         new BN(startTime),
         new BN(endTime),
-        nftMintPk,
         new BN(newProposal.value.regularVotePower),
         new BN(newProposal.value.nftVotePower),
         { [voteCategories[newProposal.value.category].label.toLowerCase()]: {} },
-        tagsArray
+        tagsArray,
+        selectedStoryPubkeys,
+        validNftIds
       )
-      .accounts({ creator: creator, vote: votePda, voteRecord: voteRecordPda, systemProgram: SystemProgram.programId })
+      .accounts({ 
+        creator: creator, 
+        vote: votePda, 
+        voteRecord: voteRecordPda, 
+        systemProgram: SystemProgram.programId 
+      })
       .rpc();
 
     showUiMessage("Proposal created successfully!", "success", txSignature);
@@ -668,11 +737,51 @@ const handleFinalizeVote = async (proposalPubkey) => {
     }
 };
 
+const fetchUserStories = async () => {
+  if (!anchorProvider || !wallet.publicKey.value) return;
+  
+  isLoadingStories.value = true;
+  try {
+    // Create a new program instance for stories
+    storyProgram = new Program(storyIdl, anchorProvider);
+    
+    const stories = await storyProgram.account.tale.all([
+      {
+        memcmp: {
+          offset: 8, // Adjust based on your account structure
+          bytes: wallet.publicKey.value.toBase58(),
+        },
+      },
+    ]);
+    userStories.value = stories;
+    console.log('Fetched stories:', stories);
+  } catch (error) {
+    console.error('Error fetching stories:', error);
+    showUiMessage('Failed to fetch stories', 'error');
+  } finally {
+    isLoadingStories.value = false;
+  }
+};
+
+const addNftId = () => {
+  if (newProposal.value.nftMint && !newProposal.value.nftIds.includes(newProposal.value.nftMint)) {
+    newProposal.value.nftIds.push(newProposal.value.nftMint);
+    newProposal.value.nftMint = ''; // Clear the input
+  }
+};
+
+const removeNftId = (index) => {
+  newProposal.value.nftIds.splice(index, 1);
+};
+
 watch(() => wallet.connected.value, (isConnected) => {
     if (isConnected) {
-      if (initializeAnchor()) fetchProposals();
+      if (initializeAnchor()) {
+        fetchProposals();
+        fetchUserStories();
+      }
     } else {
-      anchorProgram = null; proposals.value = []; voteRecords.value.clear();
+      anchorProgram = null; proposals.value = []; voteRecords.value.clear(); userStories.value = [];
       showUiMessage("Wallet disconnected.", "info");
     }
   }, { immediate: true }
@@ -1121,5 +1230,104 @@ textarea.form-input {
     width: 95%;
     padding: 1.5rem;
   }
+}
+
+.stories-fieldset, .nfts-fieldset {
+    margin-top: 1.5rem;
+    padding: 1.5rem;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+}
+
+.stories-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.story-checkbox-item {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.story-checkbox-item:hover {
+    background-color: #f5f5f5;
+}
+
+.story-checkbox {
+    margin-right: 0.75rem;
+}
+
+.story-label {
+    font-size: 0.95rem;
+    color: #333;
+    cursor: pointer;
+    flex-grow: 1;
+}
+
+.nft-input-group {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.nft-input-group .form-input {
+    flex-grow: 1;
+}
+
+.nft-list {
+    margin-top: 1rem;
+    padding: 1rem;
+    background-color: #f9f9f9;
+    border-radius: 6px;
+}
+
+.nft-list-title {
+    font-size: 1rem;
+    color: #555;
+    margin-bottom: 0.75rem;
+}
+
+.nft-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem;
+    background-color: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+}
+
+.nft-id {
+    font-family: monospace;
+    color: #666;
+}
+
+.vote-breakdown-section {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px dashed #eee;
+}
+
+.vote-breakdown-title {
+  font-size: 1.1rem;
+  color: #455a64; /* Blue Grey darker */
+  margin-bottom: 0.75rem;
+}
+
+.vote-breakdown-list {
+  list-style: none;
+  padding: 0;
+}
+
+.vote-breakdown-item {
+  padding: 0.3rem 0;
+  font-size: 0.95rem;
 }
 </style>
