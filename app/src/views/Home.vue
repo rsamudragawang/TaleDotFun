@@ -274,14 +274,22 @@
       <div v-else class="inspired-nfts-grid">
         <NFTCard
           v-for="nft in inspiredNfts"
-          :key="nft.nftMintAddress"
+          :key="nft.mint"
           :nft="{
-            mint: nft.nftMintAddress,
-            name: nft.tale?.title || nft.episode?.episodeName || 'Untitled',
-            description: nft.tale?.description || '',
-            metadata: { image: nft.tale?.coverImage || '' },
-            creator: nft.user?.name || nft.userWalletAddress,
-            price: nft.price || null
+            mint: nft.mint,
+            name: nft.name || 'Untitled',
+            description: nft.description || '',
+            symbol: nft.symbol || '',
+            image: nft.image || '',
+            creator: nft.creator,
+            price: nft.price || null,
+            itemsAvailable: nft.itemsAvailable,
+            itemsMinted: nft.itemsMinted,
+            itemsRemaining: nft.itemsRemaining,
+            candyMachineId: nft.candyMachineId || '',
+            sellerFeeBasisPoints: nft.sellerFeeBasisPoints || 0,
+            properties: nft.properties || {},
+            metadata: nft
           }"
           :showBuyButton="false"
         >
@@ -339,6 +347,9 @@ import { marked } from 'marked';
 import NFTCard from '../components/NFTCard.vue';
 import apiService from '../services/apiService';
 import taleNftIdl from '../anchor/tale_nft.json';
+import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
+import { walletAdapterIdentity } from '@metaplex-foundation/umi-signer-wallet-adapters';
+import { mplCandyMachine, fetchCandyMachine } from '@metaplex-foundation/mpl-candy-machine';
 
 // --- Configuration ---
 const AUTH_API_BASE_URL = import.meta.env.VITE_APP_AUTH_API_URL || 'http://localhost:3000/api';
@@ -577,33 +588,101 @@ async function fetchInspiredNftsOnChain() {
   try {
     // Use a read-only provider (no wallet needed for fetching)
     const readOnlyProvider = new AnchorProvider(connection, wallet.wallet.value?.adapter || wallet, AnchorProvider.defaultOptions());
-    console.log("Tale NFT Program ID:", taleNftIdl);
-    
-    const taleNftProgram = new Program(taleNftIdl, readOnlyProvider);
+    const taleStoryProgram = new Program(idl, readOnlyProvider);
 
-    // Fetch all MintActivity accounts on-chain
-    const mintActivities = await taleNftProgram.account.mintActivity.all();
+    // Fetch all Episode accounts on-chain
+    const episodes = await taleStoryProgram.account.episode.all();
 
-    console.log("Mint Activities:", mintActivities);
-    
+    // Only include episodes where is_nft is true
+    const nftEpisodes = episodes.filter(item => item.account.isNft);
 
-    // Optionally filter for only public/ready NFTs (status === 1)
-    const publicNfts = mintActivities.filter(item => item.account.status === 1);
+    // Prepare Umi for Candy Machine fetches
+    const umi = createUmi(SOLANA_RPC_URL).use(mplCandyMachine());
 
-    // Map to your NFTCard format
-    inspiredNfts.value = publicNfts.map(item => ({
-      mint: item.account.nftMintAddress.toString(),
-      name: 'Minted NFT', // TODO: Fetch real name from NFT metadata if needed
-      description: `Minted by: ${item.account.userWallet.toString()}`,
-      metadata: { image: '' }, // TODO: Fetch image from NFT metadata if needed
-      creator: item.account.userWallet.toString(),
-      candyMachineId: item.account.candyMachineId.toString(),
-      status: item.account.status,
-      timestamp: item.account.timestamp,
-      transactionSignature: item.account.transactionSignature,
+    // Build inspiredNfts with enriched data from Candy Machine
+    inspiredNfts.value = await Promise.all(nftEpisodes.map(async (item) => {
+      let cmData = null;
+      let name = item.account.episodeName;
+      let creator = item.account.author.toString();
+      let price = null;
+      let available = null;
+      let image = item.account.imageSetId || '';
+      let metadata = null;
+      let itemsAvailable = null;
+      let itemsMinted = null;
+      let itemsRemaining = null;
+
+      try {
+        if (item.account.candyMachineId && item.account.candyMachineId.length > 0) {
+          cmData = await fetchCandyMachine(umi, item.account.candyMachineId);
+          console.log("cmData", cmData);
+          
+          // Name: Prefer item name from CM, fallback to collection name, then episodeName
+          if (cmData.items && cmData.items.length > 0 && cmData.items[0].name) {
+            name = cmData.items[0].name;
+          } else if (cmData.collection && typeof cmData.collection === 'string') {
+            name = cmData.collection;
+          }
+          // Creator: Prefer authority from CM
+          if (cmData.authority) {
+            creator = cmData.authority.toString();
+          }
+          // Price: from header.lamports.basisPoints (lamports to SOL)
+          if (cmData.header && cmData.header.lamports && cmData.header.lamports.basisPoints) {
+            price = Number(cmData.header.lamports.basisPoints) / 1_000_000_000;
+          }
+          // Available, Minted, Remaining: use MintComponent logic
+            console.log("cmData.data", cmData.data.itemsAvailable, cmData.itemsRedeemed);
+            
+            itemsAvailable = Number(cmData.data.itemsAvailable);
+            itemsMinted = Number(cmData.itemsRedeemed);
+            itemsRemaining = itemsAvailable - itemsMinted;
+            available = itemsRemaining;
+
+            console.log("itemsAvailable", itemsAvailable, "itemsMinted", itemsMinted, "itemsRemaining", itemsRemaining, "available", available);
+            
+          // Image: Prefer items[0].uri from CM
+          if (cmData.items && cmData.items.length > 0 && cmData.items[0].uri) {
+            image = cmData.items[0].uri;
+            // Fetch metadata from the URI
+            try {
+              const response = await fetch(cmData.items[0].uri);
+              if (response.ok) {
+                metadata = await response.json();
+                // Update image from metadata if available
+                if (metadata.image) {
+                  image = metadata.image;
+                }
+              }
+            } catch (err) {
+              console.error('Failed to fetch NFT metadata:', err);
+            }
+          }
+        }
+      } catch (err) {
+        console.error(`Failed to fetch Candy Machine for id ${item.account.candyMachineId}:`, err);
+      }
+
+      return {
+        mint: item.publicKey.toString(),
+        name: metadata?.name || name,
+        description: metadata?.description || '',
+        symbol: metadata?.symbol || '',
+        image: metadata?.image || image,
+        creator,
+        price,
+        available,
+        itemsAvailable,
+        itemsMinted,
+        itemsRemaining,
+        candyMachineId: item.account.candyMachineId,
+        sellerFeeBasisPoints: metadata?.seller_fee_basis_points || 0,
+        properties: metadata?.properties || {},
+        metadata // Include full metadata
+      };
     }));
   } catch (e) {
-    inspiredNftsError.value = e.message || 'Failed to fetch NFTs from chain.';
+    inspiredNftsError.value = e.message || 'Failed to fetch Episodes from chain.';
   } finally {
     isLoadingInspiredNfts.value = false;
   }
