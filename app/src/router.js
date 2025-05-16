@@ -47,7 +47,8 @@ import TaleManager from './components/TaleManager.vue';
 import CandyMachineCreator from './components/CandyMachineCreator.vue';
 import MintComponent from './components/MintComponent.vue';
 import Governance from './components/Governance.vue';
-
+import LaunchNFT from './views/LaunchNft.vue';
+import PublishNFT from './views/PublishNft.vue';
 
 // If you have a specific view for Tale Details that might use EpisodeManager
 const TaleDetailView = () => import('./views/TaleDetailView.vue'); // Example for lazy loading
@@ -83,15 +84,15 @@ const routes = [
     path: '/mint/:candyMachineAddress', // General mint page, or make it dynamic like /mint/:candyMachineAddress
     name: 'MintPage',
     component: MintComponent, // You might pass a CM ID as a prop here if dynamic
-    props:true
+    props: true
   },
   {
     path: '/mint', // Fallback or general mint page
     name: 'MintGeneral',
     component: MintComponent, // This will require MintComponent to handle a missing prop
-                              // or you can redirect or show a CM selector here.
+    // or you can redirect or show a CM selector here.
     // props: (route) => ({ candyMachineAddress: route.query.cmid }) // Example for query param
-  }
+  },
   // Example of other routes you might have had:
   // {
   //   path: '/create-nft', // A general NFT creation page (if different from CM)
@@ -109,6 +110,16 @@ const routes = [
   //   component: NFTDetail,
   //   props: true,
   // },
+  {
+    path: '/launch-nft',
+    name: 'LaunchNFT',
+    component: LaunchNFT,
+  },
+  {
+    path: '/publish-nft',
+    name: 'PublishNFT',
+    component: PublishNFT,
+  }
 ];
 
 const router = createRouter({
