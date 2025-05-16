@@ -1,5 +1,5 @@
 {
-  "address": "DJgfvt8jXgkXXkRx7CaFa9FJSXbcc1SALnfyCdXHZR1j",
+  "address": "D4v7sUNHx1bsdHnBPMtZ2MeS1YssNk9iJqzCAQX3Qyik",
   "metadata": {
     "name": "tale_nft",
     "version": "0.1.0",
@@ -126,6 +126,76 @@
       "args": []
     },
     {
+      "name": "list_nft",
+      "docs": [
+        "Creates a new listing record for an NFT.",
+        "The `nft_mint_address` is the mint of the actual NFT being listed.",
+        "The `candy_machine_address` is the CM it's associated with."
+      ],
+      "discriminator": [
+        88,
+        221,
+        93,
+        166,
+        63,
+        220,
+        106,
+        232
+      ],
+      "accounts": [
+        {
+          "name": "listed_nft_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  115,
+                  116,
+                  101,
+                  100,
+                  95,
+                  110,
+                  102,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator_wallet"
+              },
+              {
+                "kind": "arg",
+                "path": "nft_mint_address_arg"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator_wallet",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "nft_mint_address_arg",
+          "type": "pubkey"
+        },
+        {
+          "name": "candy_machine_address_arg",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
       "name": "log_mint_activity",
       "discriminator": [
         191,
@@ -201,9 +271,148 @@
           }
         }
       ]
+    },
+    {
+      "name": "unlist_nft",
+      "docs": [
+        "Removes (unlists) an NFT listing.",
+        "Only the original `creator_wallet` can unlist.",
+        "This closes the `ListedNft` account and returns lamports to the creator."
+      ],
+      "discriminator": [
+        29,
+        27,
+        34,
+        4,
+        146,
+        64,
+        249,
+        21
+      ],
+      "accounts": [
+        {
+          "name": "listed_nft_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  115,
+                  116,
+                  101,
+                  100,
+                  95,
+                  110,
+                  102,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator_wallet"
+              },
+              {
+                "kind": "account",
+                "path": "listed_nft_account.nft_mint_address",
+                "account": "ListedNft"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator_wallet",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "listed_nft_account"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "update_listed_nft",
+      "docs": [
+        "Updates the associated Candy Machine for a listed NFT.",
+        "Only the original `creator_wallet` can update."
+      ],
+      "discriminator": [
+        229,
+        175,
+        254,
+        161,
+        222,
+        212,
+        112,
+        171
+      ],
+      "accounts": [
+        {
+          "name": "listed_nft_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  115,
+                  116,
+                  101,
+                  100,
+                  95,
+                  110,
+                  102,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator_wallet"
+              },
+              {
+                "kind": "account",
+                "path": "listed_nft_account.nft_mint_address",
+                "account": "ListedNft"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator_wallet",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "listed_nft_account"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "new_candy_machine_address_arg",
+          "type": "pubkey"
+        }
+      ]
     }
   ],
   "accounts": [
+    {
+      "name": "ListedNft",
+      "discriminator": [
+        217,
+        185,
+        19,
+        110,
+        217,
+        15,
+        75,
+        240
+      ]
+    },
     {
       "name": "MintActivity",
       "discriminator": [
@@ -248,9 +457,57 @@
       "code": 6005,
       "name": "MintActivityNotFound",
       "msg": "Mint activity not found or already closed."
+    },
+    {
+      "code": 6006,
+      "name": "NftAlreadyListed",
+      "msg": "NFT is already listed by this creator."
+    },
+    {
+      "code": 6007,
+      "name": "ListedNftNotFound",
+      "msg": "Listed NFT not found."
+    },
+    {
+      "code": 6008,
+      "name": "NftMintAddressRequired",
+      "msg": "The NFT Mint address cannot be empty."
+    },
+    {
+      "code": 6009,
+      "name": "CandyMachineAddressRequired",
+      "msg": "The Candy Machine address cannot be empty."
     }
   ],
   "types": [
+    {
+      "name": "ListedNft",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator_wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "nft_mint_address",
+            "type": "pubkey"
+          },
+          {
+            "name": "candy_machine_address",
+            "type": "pubkey"
+          },
+          {
+            "name": "listed_at",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
     {
       "name": "MintActivity",
       "type": {

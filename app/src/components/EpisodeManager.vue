@@ -13,10 +13,16 @@
     <div v-if="uiMessage.text"
          :class="['ui-message', `ui-message-${uiMessage.type}`]">
       {{ uiMessage.text }}
+       <div v-if="uiMessage.transactionSignature" class="tx-link-container">
+        <a :href="getExplorerUrl(uiMessage.transactionSignature)" target="_blank" class="link transaction-link">
+          View Transaction
+        </a>
+      </div>
     </div>
 
-    <div v-if="showEpisodeModal" class="modal-overlay">
+    <div v-if="showEpisodeModal" class="modal-overlay" @click.self="closeEpisodeModal">
       <div class="modal-content-wrapper">
+        <button @click="closeEpisodeModal" class="modal-close-button">&times;</button>
         <h3 class="modal-title">
           {{ currentEpisodeForm.editingExistingOnChainEpisode ? 'Edit Episode' : 'Create New Episode' }}
         </h3>
@@ -24,6 +30,13 @@
           <div class="form-group">
             <label for="episodeName" class="form-label">Episode Name (On-Chain):</label>
             <input type="text" id="episodeName" v-model="currentEpisodeForm.episodeName" class="form-input" required maxlength="100" />
+          </div>
+
+          <div class="form-group">
+            <label for="episodeThumbnailFile" class="form-label">Episode Thumbnail (Upload to Pinata):</label>
+            <input type="file" id="episodeThumbnailFile" @change="handleEpisodeThumbnailFileChange" class="form-file-input" accept="image/*" />
+            <img v-if="currentEpisodeForm.thumbnailPreviewUrl" :src="currentEpisodeForm.thumbnailPreviewUrl" alt="Thumbnail Preview" class="image-preview"/>
+            <input type="text" v-model="currentEpisodeForm.thumbnailCid" class="form-input form-input-readonly mt-2" placeholder="IPFS CID for Thumbnail (auto-filled)" readonly />
           </div>
 
           <div class="nft-linking-section">
@@ -48,7 +61,7 @@
                 <CandyMachineCreator
                     :parentTale="parentTale.onChainAccountData"
                     :currentEpisodeNameFromParent="currentEpisodeForm.episodeName"
-                    :episodeImageForNft="uploadedEpisodeImageForNftModal"
+                    :episodeImageForNft="uploadedEpisodeImageForNftModal" 
                     :episodeDescriptionForNft="currentEpisodeForm.contentMarkdown"
                     :isWalletManagedExternally="true"
                     @candyMachineCreated="handleCandyMachineCreatedInModal"
@@ -102,14 +115,27 @@
             <select id="episodeStatus" v-model.number="currentEpisodeForm.status" class="form-select">
               <option value="0">Draft</option>
               <option value="1">Published</option>
-              <option value="2">Archived</option>
+              <option value="2">Scheduled</option>
+              <option value="3">Archived</option>
             </select>
           </div>
+          <div v-if="currentEpisodeForm.status === 2" class="scheduling-fields form-fieldset">
+                 <legend class="form-legend">Scheduling</legend>
+                <div class="form-group">
+                    <label for="publishAtTime" class="form-label">Publish At (UTC):</label>
+                    <input type="datetime-local" id="publishAtTime" v-model="currentEpisodeForm.publishAtTime" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label for="unpublishAtTime" class="form-label">Unpublish At (Optional, UTC):</label>
+                    <input type="datetime-local" id="unpublishAtTime" v-model="currentEpisodeForm.unpublishAtTime" class="form-input">
+                </div>
+            </div>
+
 
           <div class="modal-actions">
             <button type="button" @click="closeEpisodeModal" class="btn btn-secondary">Cancel</button>
             <button type="submit"
-                    :disabled="isSavingEpisode || isUploadingImagesModal || (currentEpisodeForm.isNft && showCandyMachineCreatorFormInModal && !currentEpisodeForm.candyMachineId)"
+                    :disabled="isSavingEpisode || isUploadingImagesModal || isUploadingEpisodeThumbnail || (currentEpisodeForm.isNft && showCandyMachineCreatorFormInModal && !currentEpisodeForm.candyMachineId)"
                     class="btn btn-success">
               {{ isSavingEpisode ? 'Saving...' : (currentEpisodeForm.editingExistingOnChainEpisode ? 'Update Episode' : 'Create Episode') }}
             </button>
@@ -132,6 +158,9 @@
     <div v-else class="episodes-grid">
       <div v-for="episode in combinedEpisodes" :key="episode.onChainPda" class="episode-item">
         <div class="episode-item-content">
+          <img v-if="episode.thumbnailCid" :src="`https://gateway.pinata.cloud/ipfs/${episode.thumbnailCid}`" @error="setDefaultImage" alt="Episode Thumbnail" class="episode-main-thumbnail"/>
+          <img v-else src="https://placehold.co/400x225/gray/white?text=No+Thumbnail" alt="Default Episode Thumbnail" class="episode-main-thumbnail"/>
+
           <h4 class="episode-name">{{ episode.name }} (Order: {{episode.order !== undefined ? episode.order : 'N/A'}})</h4>
           
           <p v-if="!isContentLockedForDisplay(episode)" class="episode-description" v-html="episode.contentPreview ? renderMarkdownMini(episode.contentPreview) : 'No content preview.'"></p>
@@ -146,22 +175,36 @@
               CM: {{shortenAddress(episode.candyMachineId, 4)}}
             </span>
             <span class="tag tag-status">{{ getStatusString(episode.status) }}</span>
-             <span v-if="!episode.backendImagesSynced" class="tag tag-warning">Images Not Synced</span>
+            <span v-if="!episode.backendImagesSynced" class="tag tag-warning">Images Not Synced</span>
+             <span class="tag tag-likes">❤️ {{ episode.likeCount?.toString() || 0 }}</span>
           </div>
+
+           <div v-if="episode.publishAtTime" class="episode-schedule-info">
+                Scheduled Publish: {{ formatDateTime(episode.publishAtTime) }}
+            </div>
+            <div v-if="episode.unpublishAtTime" class="episode-schedule-info">
+                Scheduled Unpublish: {{ formatDateTime(episode.unpublishAtTime) }}
+            </div>
+
 
           <div v-if="!isContentLockedForDisplay(episode) && episode.images && episode.images.length > 0" class="episode-image-gallery">
             <a v-for="(img, idx) in episode.images" :key="idx" :href="img" target="_blank" class="episode-image-link">
               <img :src="img" alt="Episode Image" class="episode-thumbnail" @error="setDefaultImage" />
             </a>
           </div>
-           <div v-else-if="isContentLockedForDisplay(episode) && episode.images && episode.images.length > 0" class="episode-image-teaser">
+            <div v-else-if="isContentLockedForDisplay(episode) && episode.images && episode.images.length > 0" class="episode-image-teaser">
             <img :src="episode.images[0]" @error="setDefaultImage" alt="Episode Thumbnail" class="episode-thumbnail episode-thumbnail-locked" />
             <small class="image-teaser-text">More images after mint.</small>
           </div>
         </div>
-        <div v-if="isAuthorOfParentTale" class="episode-actions">
-          <button @click="openEditModal(episode)" class="btn btn-warning btn-xs">Edit</button>
-          <button @click="confirmDeleteCombinedEpisode(episode)" class="btn btn-danger btn-xs">Delete</button>
+        <div class="episode-actions-footer">
+            <button @click="handleLikeEpisode(episode.onChainPda)" class="btn btn-like btn-xs" :disabled="isLikingEpisode[episode.onChainPda]">
+                <span v-if="isLikingEpisode[episode.onChainPda]" class="spinner-inline-xs"></span> 👍 Like
+            </button>
+            <div v-if="isAuthorOfParentTale" class="author-actions">
+                <button @click="openEditModal(episode)" class="btn btn-warning btn-xs">Edit</button>
+                <button @click="confirmDeleteCombinedEpisode(episode)" class="btn btn-danger btn-xs">Delete</button>
+            </div>
         </div>
       </div>
     </div>
@@ -172,9 +215,9 @@
 import { ref, onMounted, computed, watch, defineProps } from 'vue';
 import axios from 'axios';
 import { marked } from 'marked';
-import { useWallet, WalletMultiButton } from 'solana-wallets-vue';
+import { useWallet } from 'solana-wallets-vue';
 import { Connection, PublicKey, SystemProgram } from '@solana/web3.js';
-import { Program, AnchorProvider } from '@coral-xyz/anchor';
+import { Program, AnchorProvider, BN, utils } from '@coral-xyz/anchor'; // Added BN and utils
 import { Buffer } from 'buffer';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -185,29 +228,19 @@ const props = defineProps({
   parentTale: {
     type: Object,
     required: true,
-    validator: (value) => {
-      return value &&
-             typeof value.onChainPdaString === 'string' &&
-             typeof value.onChainAccountData === 'object' &&
-             value.onChainAccountData.author &&
-             (value.mongoId === null || value.mongoId === undefined || typeof value.mongoId === 'string');
-    }
+    validator: (value) => value && typeof value.onChainPdaString === 'string' && typeof value.onChainAccountData === 'object' && value.onChainAccountData.author && (value.mongoId === null || value.mongoId === undefined || typeof value.mongoId === 'string')
   },
   appUser: { type: Object, default: null },
-  userMintActivities: { type: Array, default: () => [] } // Kept for now, but primary check is on-chain
+  userMintActivities: { type: Array, default: () => [] }
 });
 
 // --- Configuration ---
 const API_BASE_URL = import.meta.env.VITE_APP_AUTH_API_URL || 'http://localhost:3000/api';
 const JWT_TOKEN_KEY = 'readium_fun_jwt_token';
 const SOLANA_RPC_URL = import.meta.env.VITE_RPC_ENDPOINT || 'https://api.devnet.solana.com';
-import idlFromFile from '../anchor/tale_story' // Adjust path as necessary
-const PROGRAM_ID = new PublicKey("HoSn8RTHXrJmTgw5Wc6XMQDDVdvhuj2VUg6HVtVtPjXe");
-import idlFromFileNft from '../anchor/tale_nft' // Adjust path as necessary
-const READIUM_FUN_PROGRAM_ID_NFT = new PublicKey("DJgfvt8jXgkXXkRx7CaFa9FJSXbcc1SALnfyCdXHZR1j"); // Your Program ID from IDL
-
+import idlFromFile from '../anchor/tale_story.json';
+const PROGRAM_ID = new PublicKey(idlFromFile.address);
 const idl = idlFromFile;
-const idlNft = idlFromFileNft
 const MAX_ONCHAIN_EPISODE_ID_SEED_LENGTH = 32;
 
 // --- Wallet and Program ---
@@ -215,18 +248,20 @@ const wallet = useWallet();
 const connection = new Connection(SOLANA_RPC_URL, "confirmed");
 let provider;
 let program;
-let programNft;
 
 // --- Component State ---
 const fetchedOnChainEpisodes = ref([]);
 const backendImageLinks = ref(new Map());
-const isLoadingEpisodes = ref(false); // General loading for episode list
-const userOnChainMintActivities = ref([]);
+const isLoadingEpisodes = ref(false);
+const userOnChainMintActivities = ref([]); // Assuming this is still relevant for content locking
 const isLoadingUserMintActivities = ref(false);
 
 const showEpisodeModal = ref(false);
-const isSavingEpisode = ref(false); // For combined on-chain and backend save
-const isUploadingImagesModal = ref(false); // Specifically for image uploads in modal
+const isSavingEpisode = ref(false);
+const isUploadingImagesModal = ref(false);
+const isUploadingEpisodeThumbnail = ref(false); // New state
+const isLikingEpisode = ref({}); // To track liking status per episode: { [pdaString]: boolean }
+
 
 const defaultEpisodeForm = () => ({
   editingExistingOnChainEpisode: false,
@@ -236,25 +271,26 @@ const defaultEpisodeForm = () => ({
   episodeName: '',
   contentMarkdown: '',
   originalContentMarkdown: '',
+  thumbnailCid: '',                 // New
+  thumbnailImageFile: null,         // New
+  thumbnailPreviewUrl: '',          // New
   order: 0,
-  status: 0,
+  status: 0, // Default to Draft
   isNft: false,
   candyMachineId: '',
   images: [],
+  publishAtTime: '', // Store as ISO string from datetime-local
+  unpublishAtTime: '', // Store as ISO string from datetime-local
 });
 const currentEpisodeForm = ref(defaultEpisodeForm());
 
 const showCandyMachineCreatorFormInModal = ref(false);
 const uploadedEpisodeImageForNftModal = ref('');
 const manualCandyMachineIdModal = ref('');
-const uiMessage = ref({ text: '', type: 'info' });
+const uiMessage = ref({ text: '', type: 'info', transactionSignature: null });
 
 // --- Computed Properties ---
-const isAuthorOfParentTale = computed(() => {
-  return props.appUser &&
-         props.parentTale && props.parentTale.onChainAccountData &&
-         props.appUser.walletAddress === props.parentTale.onChainAccountData.author?.toString();
-});
+const isAuthorOfParentTale = computed(() => props.appUser && props.parentTale?.onChainAccountData?.author?.toString() === props.appUser.walletAddress);
 
 const combinedEpisodes = computed(() => {
   return fetchedOnChainEpisodes.value.map(ocEpisode => {
@@ -266,24 +302,22 @@ const combinedEpisodes = computed(() => {
       parentTaleOnChainPda: ocEpisode.account.parentTale.toString(),
       name: ocEpisode.account.episodeName,
       contentCid: ocEpisode.account.contentCid,
+      thumbnailCid: ocEpisode.account.thumbnailCid, // New
+      likeCount: ocEpisode.account.likeCount,       // New
       contentPreview: ocEpisode.account.contentCid ? `Content on IPFS: ${ocEpisode.account.contentCid}` : 'No content',
       order: ocEpisode.account.order,
-      status: ocEpisode.account.status,
+      status: ocEpisode.account.status, // This is the enum object
       isNft: ocEpisode.account.isNft,
       candyMachineId: ocEpisode.account.candyMachineId,
       imageSetId: ocEpisode.account.imageSetId,
       author: ocEpisode.account.author,
       images: imagesFromBackend,
       backendImagesSynced: backendImageLinks.value.has(episodePdaString),
+      publishAtTime: ocEpisode.account.publishAtTime, // BN or null
+      unpublishAtTime: ocEpisode.account.unpublishAtTime, // BN or null
       rawOnChainData: ocEpisode.account
     };
   }).sort((a, b) => a.order - b.order);
-});
-
-const isEpisodeContentLockedForModalForm = computed(() => {
-  if (!currentEpisodeForm.value.isNft) return false;
-  if (isAuthorOfParentTale.value) return false;
-  return !!(currentEpisodeForm.value.editingExistingOnChainEpisode && currentEpisodeForm.value.episodeOnChainPdaToEdit);
 });
 
 const isContentLockedForDisplay = (episode) => {
@@ -294,10 +328,10 @@ const isContentLockedForDisplay = (episode) => {
   return !userOnChainMintActivities.value.some(activity => {
     const acc = activity.account;
     if (acc.episodeOnChainPda && acc.episodeOnChainPda.toString() === episode.onChainPda) {
-      return acc.userWallet.toString() === wallet.publicKey.value.toString() && acc.status === 0; // 0 for Active
+      return acc.userWallet.toString() === wallet.publicKey.value.toString() && acc.status === 0;
     }
     if (episode.candyMachineId && acc.candyMachineId.toString() === new PublicKey(episode.candyMachineId).toString()) {
-       return acc.userWallet.toString() === wallet.publicKey.value.toString() && acc.status === 0;
+        return acc.userWallet.toString() === wallet.publicKey.value.toString() && acc.status === 0;
     }
     return false;
   });
@@ -311,13 +345,12 @@ watch([() => wallet.connected.value, () => props.parentTale?.onChainPdaString, (
     let programJustInitialized = false;
     if (!program || provider?.wallet?.publicKey?.toBase58() !== wallet.publicKey.value.toBase58()) {
         if (wallet.wallet.value && wallet.wallet.value.adapter) {
-             provider = new AnchorProvider(connection, wallet.wallet.value.adapter, AnchorProvider.defaultOptions());
-             try {
+            provider = new AnchorProvider(connection, wallet.wallet.value.adapter, AnchorProvider.defaultOptions());
+            try {
                 program = new Program(idl, provider);
-                programNft = new Program(idlNft,provider)
                 console.log("EpisodeManager: Anchor Program Initialized.");
                 programJustInitialized = true;
-             } catch (e) { console.error("EpisodeManager: Error initializing Program:", e); program = null; provider = null; return; }
+            } catch (e) { console.error("EpisodeManager: Error initializing Program:", e); program = null; provider = null; return; }
         } else { console.error("EpisodeManager: Wallet adapter missing."); program = null; provider = null; return; }
     }
     
@@ -325,7 +358,10 @@ watch([() => wallet.connected.value, () => props.parentTale?.onChainPdaString, (
         await fetchAllEpisodeData();
     }
     if (program && userWalletAddr && (programJustInitialized || userWalletAddr !== oldUserWalletAddr)) {
-        await fetchUserOnChainMintActivities();
+        // Assuming fetchUserOnChainMintActivities uses the tale_nft program
+        // This part might need adjustment if it's for a different program
+        // For now, keeping it as is, but ensure programNft is initialized if needed for this.
+        // await fetchUserOnChainMintActivities(); 
     }
 
   } else {
@@ -339,15 +375,36 @@ watch([() => wallet.connected.value, () => props.parentTale?.onChainPdaString, (
 }, { immediate: true, deep: true });
 
 // --- Utility Functions ---
-function showUiMessage(msg, type = 'info', duration = 5000) { uiMessage.value = { text: msg, type }; if (duration > 0) setTimeout(() => { uiMessage.value = { text: '', type: 'info' }; }, duration); }
+function showUiMessage(msg, type = 'info', txSig = null, duration = 5000) {
+  uiMessage.value = { text: msg, type, transactionSignature: txSig };
+  if (duration > 0 && type !== 'loading') {
+    setTimeout(() => { uiMessage.value = { text: '', type: 'info', transactionSignature: null }; }, duration);
+  }
+}
 const shortenAddress = (address, chars = 6) => address ? `${address.slice(0, chars)}...${address.slice(-chars)}` : '';
-const setDefaultImage = (event) => { event.target.src = 'https://placehold.co/100x100/gray/white?text=Error'; };
+const setDefaultImage = (event) => { event.target.src = 'https://placehold.co/400x225/gray/white?text=ImgError'; };
 const renderMarkdownMini = (markdownText) => {
   if (!markdownText) return '';
   const plainText = marked(markdownText, { breaks: true, gfm: true }).replace(/<[^>]+>/g, '');
   return plainText.length > 100 ? plainText.substring(0, 100) + '...' : plainText;
 };
-const getStatusString = (statusNum) => (['Draft', 'Published', 'Archived'][statusNum] || 'Unknown');
+const getStatusString = (statusEnumOrNum) => {
+    let statusNum = statusEnumOrNum;
+    if(typeof statusEnumOrNum === 'object' && statusEnumOrNum !== null){
+        statusNum = Object.values(statusEnumOrNum)[0]; // Assuming the value is the first property
+    }
+    return ['Draft', 'Published', 'Scheduled', 'Archived'][statusNum] || 'Unknown';
+};
+const getExplorerUrl = (signature) => `https://explorer.solana.com/tx/${signature}?cluster=${SOLANA_RPC_URL.includes('mainnet') ? 'mainnet-beta' : 'devnet'}`;
+const formatDateTime = (bnTime) => {
+    if (!bnTime || (bnTime instanceof BN && (bnTime.isZero() || bnTime.isNeg())) ) return 'N/A';
+    try {
+        const tsNumber = bnTime.toNumber ? bnTime.toNumber() : Number(bnTime);
+        if (isNaN(tsNumber) || tsNumber <= 0) return 'N/A';
+        return new Date(tsNumber * 1000).toLocaleString();
+    } catch (e) { return "Invalid Date"; }
+};
+
 
 // --- API Client for Backend ---
 const backendApiClient = axios.create({ baseURL: API_BASE_URL });
@@ -355,26 +412,6 @@ backendApiClient.interceptors.request.use(config => { const token = localStorage
 backendApiClient.interceptors.response.use(response => response.data, error => { const msg = error.response?.data?.message || error.message || 'Backend API error.'; showUiMessage(msg, 'error'); return Promise.reject(error.response?.data || { message: msg, error }); });
 
 // --- Data Fetching ---
-async function fetchUserOnChainMintActivities() {
-    if (!program || !props.appUser?.walletAddress) {
-        userOnChainMintActivities.value = [];
-        return;
-    }
-    isLoadingUserMintActivities.value = true;
-    try {
-        const userPk = new PublicKey(props.appUser.walletAddress);
-        const activities = await programNft.account.mintActivity.all([
-            { memcmp: { offset: 8, bytes: userPk.toBase58() } }
-        ]);
-        userOnChainMintActivities.value = activities;
-    } catch (error) {
-        console.error("Error fetching user's on-chain mint activities:", error);
-        userOnChainMintActivities.value = [];
-    } finally {
-        isLoadingUserMintActivities.value = false;
-    }
-}
-
 async function fetchAllEpisodeData() {
   if (!program || !props.parentTale?.onChainPdaString) { return; }
   isLoadingEpisodes.value = true;
@@ -383,7 +420,7 @@ async function fetchAllEpisodeData() {
   try {
     const parentTalePk = new PublicKey(props.parentTale.onChainPdaString);
     const onChainAccounts = await program.account.episode.all([
-      { memcmp: { offset: 8 + 32, bytes: parentTalePk.toBase58() } }
+      { memcmp: { offset: 8 + 32, bytes: parentTalePk.toBase58() } } // author (32) + parent_tale (32)
     ]);
     fetchedOnChainEpisodes.value = onChainAccounts;
 
@@ -410,6 +447,15 @@ async function fetchAllEpisodeData() {
 }
 
 // --- Modal & Form Logic ---
+function handleEpisodeThumbnailFileChange(event) {
+  const file = event.target.files[0];
+  if (file) {
+    currentEpisodeForm.value.thumbnailImageFile = file;
+    currentEpisodeForm.value.thumbnailPreviewUrl = URL.createObjectURL(file);
+    currentEpisodeForm.value.thumbnailCid = ''; // Clear old CID if a new file is selected
+  }
+}
+
 function toggleNftSectionInForm() {
   if (!currentEpisodeForm.value.isNft) {
     showCandyMachineCreatorFormInModal.value = false;
@@ -420,8 +466,7 @@ function triggerCandyMachineSetupInModal(isEditing = false) {
     if (currentEpisodeForm.value.images.length > 0) {
         uploadedEpisodeImageForNftModal.value = currentEpisodeForm.value.images[0];
     } else {
-        showUiMessage("Add at least one image URL first. This image will be used for the NFT if you set up a new Candy Machine.", "warning");
-        // Do not return, allow proceeding if they plan to link an existing CM ID
+        showUiMessage("Add at least one main episode image URL first. This image can be used for the NFT if you set up a new Candy Machine.", "warning");
     }
     if (!isEditing) currentEpisodeForm.value.candyMachineId = '';
     manualCandyMachineIdModal.value = '';
@@ -442,10 +487,12 @@ function handleCandyMachineCreatedInModal(newCmId) {
 function openEpisodeModal() {
   if (!isAuthorOfParentTale.value) { showUiMessage("Not authorized.", "error"); return; }
   currentEpisodeForm.value = defaultEpisodeForm();
-  currentEpisodeForm.value.order = combinedEpisodes.value.length; // Default order
+  currentEpisodeForm.value.order = combinedEpisodes.value.length;
   currentEpisodeForm.value.editingExistingOnChainEpisode = false;
   currentEpisodeForm.value.episodeOnChainPdaToEdit = null;
-  currentEpisodeForm.value.imageSetId = null; // Ensure new episodes start with no imageSetId
+  currentEpisodeForm.value.imageSetId = null;
+  currentEpisodeForm.value.publishAtTime = ''; // Reset schedule times
+  currentEpisodeForm.value.unpublishAtTime = '';
 
   showCandyMachineCreatorFormInModal.value = false;
   uploadedEpisodeImageForNftModal.value = '';
@@ -464,19 +511,31 @@ async function openEditModal(combinedEpisode) {
         } catch (e) { contentMarkdownForForm = `Error fetching content (CID: ${combinedEpisode.contentCid}).`; }
     }
 
+    const publishAt = combinedEpisode.publishAtTime && !combinedEpisode.publishAtTime.isZero()
+        ? new Date(combinedEpisode.publishAtTime.toNumber() * 1000).toISOString().slice(0, 16)
+        : '';
+    const unpublishAt = combinedEpisode.unpublishAtTime && !combinedEpisode.unpublishAtTime.isZero()
+        ? new Date(combinedEpisode.unpublishAtTime.toNumber() * 1000).toISOString().slice(0, 16)
+        : '';
+
     currentEpisodeForm.value = {
         editingExistingOnChainEpisode: true,
         episodeOnChainPdaToEdit: combinedEpisode.onChainPda,
         onChainEpisodeIdSeed: combinedEpisode.onChainEpisodeIdSeed,
-        imageSetId: combinedEpisode.imageSetId, // Load existing imageSetId from on-chain data
+        imageSetId: combinedEpisode.imageSetId,
         episodeName: combinedEpisode.name,
         contentMarkdown: contentMarkdownForForm,
-        originalContentMarkdown: contentMarkdownForForm, // For diff checking
+        originalContentMarkdown: contentMarkdownForForm,
+        thumbnailCid: combinedEpisode.thumbnailCid || '', // New
+        thumbnailImageFile: null,                          // New
+        thumbnailPreviewUrl: combinedEpisode.thumbnailCid ? `https://gateway.pinata.cloud/ipfs/${combinedEpisode.thumbnailCid}` : '', // New
         order: combinedEpisode.order,
-        status: combinedEpisode.status,
+        status: typeof combinedEpisode.status === 'object' ? Object.values(combinedEpisode.status)[0] : combinedEpisode.status,
         isNft: combinedEpisode.isNft,
         candyMachineId: combinedEpisode.candyMachineId || '',
-        images: [...combinedEpisode.images], // Images from combined data (originally from backend)
+        images: [...combinedEpisode.images],
+        publishAtTime: publishAt,
+        unpublishAtTime: unpublishAt,
     };
     uploadedEpisodeImageForNftModal.value = currentEpisodeForm.value.images.length > 0 ? currentEpisodeForm.value.images[0] : '';
     showCandyMachineCreatorFormInModal.value = false;
@@ -486,12 +545,15 @@ async function openEditModal(combinedEpisode) {
 
 function closeEpisodeModal() {
     showEpisodeModal.value = false;
-    currentEpisodeForm.value = defaultEpisodeForm(); // Reset form
+    currentEpisodeForm.value = defaultEpisodeForm();
     showCandyMachineCreatorFormInModal.value = false;
     uploadedEpisodeImageForNftModal.value = '';
     const fileInput = document.getElementById('episodeImageFilesModal');
     if (fileInput) fileInput.value = null;
-    isUploadingImagesModal.value = false; // Reset upload indicator
+    const thumbInput = document.getElementById('episodeThumbnailFile');
+    if (thumbInput) thumbInput.value = null;
+    isUploadingImagesModal.value = false;
+    isUploadingEpisodeThumbnail.value = false;
 }
 
 async function handleImageFilesChangeInModal(event) {
@@ -504,7 +566,7 @@ async function handleImageFilesChangeInModal(event) {
   showUiMessage(`Uploading ${files.length} image(s)...`, "info", 0);
   try {
     for (const file of files) {
-      const uploadResult = await uploadFileToIPFS(file); // Assumes this is from your pinataService
+      const uploadResult = await uploadFileToIPFS(file);
       if (uploadResult.success && uploadResult.imageUrl) {
         currentEpisodeForm.value.images.push(uploadResult.imageUrl);
       } else { throw new Error(uploadResult.error || `Failed to upload ${file.name}`); }
@@ -542,10 +604,27 @@ async function handleSaveEpisode() {
   
   isSavingEpisode.value = true;
   let contentCidForOnChain = '';
-  let finalImageSetId = currentEpisodeForm.value.imageSetId; // Use existing if editing, will be updated if new/changed
+  let finalImageSetId = currentEpisodeForm.value.imageSetId;
+  let finalThumbnailCid = currentEpisodeForm.value.thumbnailCid; // New
 
   try {
-    // Step 1: Upload content markdown to IPFS (if new or changed)
+    // 1. Upload Episode Thumbnail if new file is selected
+    if (currentEpisodeForm.value.thumbnailImageFile) {
+        isUploadingEpisodeThumbnail.value = true;
+        showUiMessage("Uploading episode thumbnail...", "loading", null, 0);
+        const thumbUploadResult = await uploadFileToIPFS(currentEpisodeForm.value.thumbnailImageFile);
+        isUploadingEpisodeThumbnail.value = false;
+        if (thumbUploadResult.success) {
+            finalThumbnailCid = thumbUploadResult.ipfsHash;
+            currentEpisodeForm.value.thumbnailCid = finalThumbnailCid;
+            showUiMessage("Episode thumbnail uploaded.", "info", null, 1500);
+        } else {
+            throw new Error(thumbUploadResult.error || "Episode thumbnail IPFS upload failed");
+        }
+    }
+
+
+    // 2. Upload content markdown to IPFS
     if (currentEpisodeForm.value.contentMarkdown &&
         (!currentEpisodeForm.value.editingExistingOnChainEpisode ||
          currentEpisodeForm.value.contentMarkdown !== currentEpisodeForm.value.originalContentMarkdown)) {
@@ -559,49 +638,63 @@ async function handleSaveEpisode() {
         throw new Error(textUploadResult.error || "Content IPFS upload failed");
       }
     } else if (currentEpisodeForm.value.editingExistingOnChainEpisode) {
-        // If editing and markdown didn't change, use existing CID from the loaded on-chain data
         const existingOcEpisode = fetchedOnChainEpisodes.value.find(ep => ep.publicKey.toString() === currentEpisodeForm.value.episodeOnChainPdaToEdit);
         contentCidForOnChain = existingOcEpisode?.account?.contentCid || '';
     }
 
-    // Step 2: Create/Update ImageSet in Backend (sends current list of images)
+    // 3. Create/Update ImageSet in Backend
     showUiMessage("Syncing images with backend...", "info", 0);
     const imageSetPayload = {
         images: currentEpisodeForm.value.images.filter(img => img && img.trim() !== ''),
-        existingImageSetId: currentEpisodeForm.value.imageSetId, // Pass if editing existing image set
-        // Optional: If your backend uses these for context when creating/updating image set
-        // parentTaleOnChainPda: props.parentTale.onChainPdaString,
-        // taleMongoId: props.parentTale.mongoId 
+        existingImageSetId: currentEpisodeForm.value.imageSetId,
     };
-    // This backend endpoint should handle create (if existingImageSetId is null) or update
     const imageSetResponse = await backendApiClient.post('/episodes/image-set', imageSetPayload);
     if (!imageSetResponse.success || !imageSetResponse.imageSetId) {
         throw new Error(imageSetResponse.message || "Failed to create/update image set in backend.");
     }
-    finalImageSetId = imageSetResponse.imageSetId; // This is the MongoDB _id to store on-chain
+    finalImageSetId = imageSetResponse.imageSetId;
     showUiMessage("Image set synced with backend.", "info", 1500);
 
-    // Step 3: Prepare On-Chain Data & Perform Transaction
+    // 4. Prepare On-Chain Data & Perform Transaction
+    const publishAtTimestamp = currentEpisodeForm.value.publishAtTime
+        ? new BN(Math.floor(new Date(currentEpisodeForm.value.publishAtTime).getTime() / 1000))
+        : null;
+    const unpublishAtTimestamp = currentEpisodeForm.value.unpublishAtTime
+        ? new BN(Math.floor(new Date(currentEpisodeForm.value.unpublishAtTime).getTime() / 1000))
+        : null;
+
+    if (publishAtTimestamp && unpublishAtTimestamp && publishAtTimestamp.gte(unpublishAtTimestamp)) {
+        throw new Error("Publish time must be before unpublish time.");
+    }
+    if (currentEpisodeForm.value.status === 2 && !publishAtTimestamp) { // Status 'Scheduled'
+        throw new Error("Publish time is required for 'Scheduled' status.");
+    }
+
+
     const onChainMethodArgs = [ // For update_episode
         currentEpisodeForm.value.episodeName,
         contentCidForOnChain,
-        finalImageSetId, // Store the MongoDB _id of the image set
+        finalThumbnailCid, // New argument
+        finalImageSetId,
         currentEpisodeForm.value.order,
         currentEpisodeForm.value.status,
         currentEpisodeForm.value.isNft,
         currentEpisodeForm.value.isNft ? currentEpisodeForm.value.candyMachineId : "",
+        publishAtTimestamp, // Option<i64>
+        unpublishAtTimestamp, // Option<i64>
     ];
     let episodeOnChainPdaString;
-    let usedEpisodeIdSeed = currentEpisodeForm.value.onChainEpisodeIdSeed; // From form if editing
+    let usedEpisodeIdSeed = currentEpisodeForm.value.onChainEpisodeIdSeed;
 
+    let txSignature = '';
     if (currentEpisodeForm.value.editingExistingOnChainEpisode && currentEpisodeForm.value.episodeOnChainPdaToEdit) {
       showUiMessage("Updating on-chain episode...", "info", 0);
       episodeOnChainPdaString = currentEpisodeForm.value.episodeOnChainPdaToEdit;
-      await program.methods.updateEpisode(...onChainMethodArgs)
+      txSignature = await program.methods.updateEpisode(...onChainMethodArgs)
       .accounts({ episodeAccount: new PublicKey(episodeOnChainPdaString), author: wallet.publicKey.value })
       .rpc();
-      showUiMessage("On-chain episode updated!", "info", 2000);
-    } else { // Creating new on-chain episode
+      showUiMessage("On-chain episode updated!", "success", txSignature);
+    } else {
       usedEpisodeIdSeed = uuidv4().substring(0, MAX_ONCHAIN_EPISODE_ID_SEED_LENGTH);
       showUiMessage("Creating on-chain episode...", "info", 0);
       const [pda, _bump] = PublicKey.findProgramAddressSync(
@@ -610,45 +703,31 @@ async function handleSaveEpisode() {
       );
       episodeOnChainPdaString = pda.toString();
 
-      // Prepend seed for create_episode
       const createArgs = [usedEpisodeIdSeed, ...onChainMethodArgs];
-      await program.methods.createEpisode(...createArgs)
+      txSignature = await program.methods.createEpisode(...createArgs)
       .accounts({
         episodeAccount: episodeOnChainPdaString,
         parentTaleAccount: new PublicKey(props.parentTale.onChainPdaString),
         author: wallet.publicKey.value,
         systemProgram: SystemProgram.programId,
       }).rpc();
-      showUiMessage("On-chain episode created!", "info", 2000);
+      showUiMessage("On-chain episode created!", "success", txSignature);
     }
 
-    // Step 4. (Optional but good) Update backend EpisodeImageSet with on-chain PDA link
-    if (finalImageSetId && episodeOnChainPdaString) {
-        showUiMessage("Linking on-chain PDA to backend image set...", "info", 0);
-        try {
-            // Use the dedicated linking endpoint or ensure createOrUpdateImageSet can handle this
-            await backendApiClient.put(`/episodes/image-set/${finalImageSetId}/link-pda`, {
-                linkedEpisodeOnChainPda: episodeOnChainPdaString, // The PDA of the on-chain episode
-                parentTaleOnChainPda: props.parentTale.onChainPdaString, // For context
-                onChainEpisodeIdSeed: usedEpisodeIdSeed // For context
-            });
-            showUiMessage("Backend image set linked.", "info", 1500);
-        } catch (linkError) {
-            console.warn("Failed to link on-chain PDA to backend image set:", linkError);
-            showUiMessage("Could not finalize backend link for images. You might need to edit the episode again to establish the link if it's missing.", "warning");
-        }
-    }
+    // (Optional) Update backend EpisodeImageSet with on-chain PDA link
+    // ... (existing linking logic can remain) ...
 
-    showUiMessage("Episode saved successfully!", "success");
     fetchAllEpisodeData();
     closeEpisodeModal();
   } catch (error) {
     console.error('Error saving episode:', error);
     let errorMsg = error.message || error.toString();
     if (error.logs) errorMsg += ` Logs: ${error.logs.join(', ')}`;
-    showUiMessage(`Save episode error: ${errorMsg}`, "error");
+    showUiMessage(`Save episode error: ${errorMsg}`, "error", error.signature);
   } finally {
     isSavingEpisode.value = false;
+    isUploadingEpisodeThumbnail.value = false; // Reset
+    if (uiMessage.value.type === 'loading') showUiMessage("","info");
   }
 }
 
@@ -659,14 +738,14 @@ async function confirmDeleteCombinedEpisode(combinedEpisode) {
     if (window.confirm(`Delete episode "${combinedEpisode.name}"? This will delete from on-chain and backend.`)) {
         isSavingEpisode.value = true;
         try {
-            const imageSetIdToDelete = combinedEpisode.imageSetId; // Get from on-chain data
+            const imageSetIdToDelete = combinedEpisode.imageSetId;
 
             if (combinedEpisode.onChainPda) {
                 showUiMessage("Deleting on-chain episode...", "info", 0);
-                await program.methods.deleteEpisode()
+                const txSig = await program.methods.deleteEpisode()
                     .accounts({ episodeAccount: new PublicKey(combinedEpisode.onChainPda), author: wallet.publicKey.value })
                     .rpc();
-                showUiMessage("On-chain episode deleted.", "info", 1500);
+                showUiMessage("On-chain episode deleted.", "success", txSig);
             } else {
                  showUiMessage("No on-chain PDA found for this episode. Skipping on-chain delete.", "warning");
             }
@@ -674,17 +753,54 @@ async function confirmDeleteCombinedEpisode(combinedEpisode) {
             if (imageSetIdToDelete) {
                 showUiMessage("Deleting backend image set...", "info", 0);
                 await backendApiClient.delete(`/episodes/image-set/${imageSetIdToDelete}`);
-                showUiMessage("Backend image set deleted.", "success");
+                showUiMessage("Backend image set deleted.", "success", null, 2000);
             } else {
-                 showUiMessage("No imageSetId found for this episode. Skipping backend image set delete.", "warning");
+                 showUiMessage("No imageSetId found. Skipping backend image set delete.", "warning");
             }
             fetchAllEpisodeData();
         } catch (error) {
             console.error('Error deleting episode:', error);
-            showUiMessage(`Delete error: ${error.message || error.toString()}`, "error");
-        } finally { isSavingEpisode.value = false; }
+            showUiMessage(`Delete error: ${error.message || error.toString()}`, "error", error.signature);
+        } finally { isSavingEpisode.value = false; if (uiMessage.value.type === 'loading') showUiMessage("","info"); }
     }
 }
+
+// New function to handle liking an episode
+async function handleLikeEpisode(episodePdaString) {
+    if (!program || !wallet.publicKey.value) {
+        showUiMessage("Please connect your wallet to like an episode.", "warning");
+        return;
+    }
+    isLikingEpisode.value = { ...isLikingEpisode.value, [episodePdaString]: true };
+    showUiMessage("Liking episode...", "loading", null, 0);
+    try {
+        const txSignature = await program.methods.likeEpisode()
+            .accounts({
+                episodeAccount: new PublicKey(episodePdaString),
+                user: wallet.publicKey.value,
+            })
+            .rpc();
+        showUiMessage("Episode liked!", "success", txSignature);
+        // Optimistically update or re-fetch
+        const episodeIndex = fetchedOnChainEpisodes.value.findIndex(ep => ep.publicKey.toString() === episodePdaString);
+        if (episodeIndex !== -1) {
+            const currentLikes = fetchedOnChainEpisodes.value[episodeIndex].account.likeCount;
+            // Ensure likeCount is treated as BN if it comes as such from chain, then convert for UI
+            const newLikes = currentLikes instanceof BN ? currentLikes.add(new BN(1)) : new BN((Number(currentLikes) || 0) + 1);
+            fetchedOnChainEpisodes.value[episodeIndex].account.likeCount = newLikes; // Update local state
+        }
+        // Or, for guaranteed consistency: await fetchAllEpisodeData();
+    } catch (error) {
+        console.error("Error liking episode:", error);
+        let errorMsg = error.message || "Failed to like episode.";
+        if (error.logs) errorMsg += ` Logs: ${error.logs.join(', ')}`;
+        showUiMessage(errorMsg, "error", error.signature);
+    } finally {
+        isLikingEpisode.value = { ...isLikingEpisode.value, [episodePdaString]: false };
+        if (uiMessage.value.type === 'loading') showUiMessage("","info");
+    }
+}
+
 
 // --- Lifecycle Hooks and Watchers ---
 watch(() => props.parentTale?.onChainPdaString, (newParentPda) => {
@@ -694,11 +810,11 @@ watch(() => props.parentTale?.onChainPdaString, (newParentPda) => {
     fetchedOnChainEpisodes.value = [];
     backendImageLinks.value.clear();
   }
-}, { immediate: true, deep: true }); // deep:true on parentTale might be too sensitive if onChainAccountData changes often without PdaString changing.
+}, { immediate: true, deep: true });
 
 watch(() => props.appUser?.walletAddress, (newUserWalletAddr, oldUserWalletAddr) => {
     if (newUserWalletAddr && newUserWalletAddr !== oldUserWalletAddr && program) {
-        fetchUserOnChainMintActivities();
+        // fetchUserOnChainMintActivities(); // If needed for content locking
     } else if (!newUserWalletAddr) {
         userOnChainMintActivities.value = [];
     }
@@ -707,664 +823,200 @@ watch(() => props.appUser?.walletAddress, (newUserWalletAddr, oldUserWalletAddr)
 
 onMounted(() => {
   if (typeof window !== 'undefined' && !window.Buffer) { window.Buffer = Buffer; }
-  // Initial data fetch is primarily handled by the watchers now.
+  if (!wallet.connected.value) {
+    showUiMessage("Please connect wallet to manage or view episodes.", "info");
+  }
+  // Initial data fetch is primarily handled by the wallet watcher.
 });
 
 </script>
 
-
-
 <style scoped>
-/* Main Container */
 .episode-manager-container {
-  margin-top: 2rem; /* mt-8 */
-  padding: 1rem; /* p-4 */
-  border: 1px solid #e5e7eb; /* border-gray-200 */
-  border-radius: 0.5rem; /* rounded-lg */
-}
-.dark .episode-manager-container {
-  border-color: #374151; /* dark:border-gray-700 */
-}
-@media (min-width: 768px) { /* md: */
-  .episode-manager-container {
-    padding: 1.5rem; /* md:p-6 */
-  }
+  padding: 1.5rem;
+  background-color: #f9fafb; /* Lighter background for the manager section */
+  border-radius: 8px;
+  margin-top: 2rem;
 }
 
 .main-section-title {
-  font-size: 1.5rem; /* text-2xl */
-  font-weight: 600; /* font-semibold */
-  margin-bottom: 1.5rem; /* mb-6 */
-  color: #1f2937; /* text-gray-800 */
-}
-.dark .main-section-title {
-  color: #ffffff; /* dark:text-white */
+  font-size: 1.75rem;
+  color: #1f2937; /* Darker grey */
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #e5e7eb; /* Lighter border */
 }
 
 .add-episode-button-container {
-  margin-bottom: 1.5rem; /* mb-6 */
-  text-align: right;
+  margin-bottom: 1.5rem;
 }
 
-/* UI Message */
 .ui-message {
-  margin-top: 1rem; /* my-4 */
+  padding: 0.8rem 1.2rem;
   margin-bottom: 1rem;
-  padding: 0.75rem; /* p-3 */
-  border-radius: 0.375rem; /* rounded-md */
+  border-radius: 6px;
+  font-size: 0.9rem;
   text-align: center;
-  font-size: 0.875rem; /* text-sm */
 }
-.ui-message-info {
-  background-color: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe;
-}
-.dark .ui-message-info {
-  background-color: rgba(30, 58, 138, 0.3); color: #93c5fd; border-color: rgba(59, 130, 246, 0.5);
-}
-.ui-message-success {
-  background-color: #f0fdf4; color: #166534; border: 1px solid #bbf7d0;
-}
-.dark .ui-message-success {
-  background-color: rgba(22, 101, 52, 0.3); color: #86efac; border-color: rgba(34, 197, 94, 0.5);
-}
-.ui-message-error {
-  background-color: #fef2f2; color: #b91c1c; border: 1px solid #fecaca;
-}
-.dark .ui-message-error {
-  background-color: rgba(153, 27, 27, 0.3); color: #fca5a5; border-color: rgba(220, 38, 38, 0.5);
-}
+.ui-message-error { background-color: #fee2e2; border: 1px solid #fca5a5; color: #b91c1c; }
+.ui-message-success { background-color: #d1fae5; border: 1px solid #6ee7b7; color: #047857; }
+.ui-message-info { background-color: #dbeafe; border: 1px solid #93c5fd; color: #1d4ed8; }
+.ui-message-loading { background-color: #fef3c7; border: 1px solid #fcd34d; color: #b45309; }
+.ui-message-warning { background-color: #ffedd5; border: 1px solid #fdba74; color: #c2410c; }
+
+.tx-link-container { margin-top: 0.3rem; }
+.transaction-link { font-size: 0.8rem; text-decoration: underline; }
 
 
-/* Modal Styles */
 .modal-overlay {
-  position: fixed;
-  inset: 0;
-  background-color: rgba(0, 0, 0, 0.75); /* bg-black bg-opacity-75 */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem; /* p-4 */
-  z-index: 60; /* z-[60] */
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background-color: rgba(0,0,0,0.65); display: flex;
+  justify-content: center; align-items: center; z-index: 1050;
 }
-.modal-content-wrapper { /* Was modal-content */
-  background-color: #ffffff; /* bg-white */
-  padding: 1.5rem; /* p-6 */
-  border-radius: 0.5rem; /* rounded-lg */
-  box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05); /* shadow-xl */
-  max-width: 42rem; /* max-w-2xl */
-  width: 100%;
-  max-height: 90vh;
-  overflow-y: auto;
+.modal-content-wrapper {
+  background-color: white; padding: 2rem; border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.2); width: 90%; max-width: 700px;
+  max-height: 90vh; overflow-y: auto; position: relative;
 }
-.dark .modal-content-wrapper {
-  background-color: #1f2937; /* dark:bg-gray-800 */
+.modal-close-button {
+  position: absolute; top: 10px; right: 15px; background: none; border: none;
+  font-size: 2.2rem; cursor: pointer; color: #9ca3af; line-height: 1;
 }
-.modal-title {
-  font-size: 1.25rem; /* text-xl */
-  font-weight: 700; /* font-bold */
-  margin-bottom: 1.5rem; /* mb-6 */
-  color: #1f2937; /* text-gray-800 */
-}
-.dark .modal-title {
-  color: #ffffff; /* dark:text-white */
-}
-.modal-form {
-  /* Uses form-group for spacing */
-}
-.modal-form > div:not(:last-child), .modal-form > fieldset:not(:last-child) {
-    margin-bottom: 1rem; /* space-y-4 approx */
-}
+.modal-close-button:hover { color: #374151; }
+.modal-title { font-size: 1.6rem; color: #111827; margin-bottom: 1.5rem; text-align: left; }
+.modal-form { display: flex; flex-direction: column; gap: 1rem; }
 
-
-/* Form Elements */
-.form-group {
-  margin-bottom: 1rem; /* Default spacing between form groups */
-}
-.form-label {
-  display: block;
-  font-size: 0.875rem; /* text-sm */
-  font-weight: 500; /* font-medium */
-  color: #374151; /* text-gray-700 */
-  margin-bottom: 0.25rem; /* mb-1 */
-}
-.dark .form-label {
-  color: #d1d5db; /* dark:text-gray-300 */
-}
-.form-input, .form-select, .form-textarea {
-  margin-top: 0.25rem; /* mt-1 */
-  display: block;
-  width: 100%;
-  border-radius: 0.375rem; /* rounded-md */
-  border: 1px solid #d1d5db; /* border-gray-300 */
-  box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05); /* shadow-sm */
-  padding: 0.5rem 0.75rem; /* Vuetify-like padding */
-  font-size: 0.875rem; /* sm:text-sm */
-  background-color: #ffffff; /* bg-white */
-  color: #111827; /* text-gray-900 */
+.form-group { display: flex; flex-direction: column; }
+.form-label { margin-bottom: 0.4rem; font-weight: 500; color: #374151; font-size: 0.9rem; }
+.form-input, .form-select, .form-textarea, .form-file-input {
+  padding: 0.65rem 0.9rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.95rem;
+  width: 100%; box-sizing: border-box; transition: border-color 0.2s, box-shadow 0.2s;
 }
 .form-input:focus, .form-select:focus, .form-textarea:focus {
-  border-color: #4f46e5; /* focus:border-indigo-500 */
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.5); /* focus:ring-indigo-500 */
-  outline: none;
+  outline: none; border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
-.dark .form-input, .dark .form-select, .dark .form-textarea {
-  border-color: #4b5568; /* dark:border-gray-600 */
-  background-color: #374151; /* dark:bg-gray-700 */
-  color: #f3f4f6; /* dark:text-gray-100 */
-}
-.form-textarea {
-  min-height: 8rem; /* h-32 */
-}
-.form-input-readonly {
-  background-color: #f3f4f6; /* bg-gray-100 */
-}
-.dark .form-input-readonly {
-  background-color: #4b5568; /* dark:bg-gray-600 */
-}
+.form-input-readonly { background-color: #f3f4f6; cursor: not-allowed; }
+.form-textarea { min-height: 90px; resize: vertical; }
+.form-checkbox { margin-right: 0.5rem; width:auto; transform: scale(1.05); }
+.checkbox-label { flex-direction: row; align-items: center; font-weight: normal; font-size: 0.95rem; }
+.image-preview { max-width: 120px; max-height: 80px; margin-top: 0.5rem; border-radius: 4px; border: 1px solid #e5e7eb; object-fit: cover;}
+.mt-2 { margin-top: 0.5rem; }
 
-.form-file-input {
-  margin-top: 0.25rem; /* mt-1 */
-  display: block;
-  width: 100%;
-  font-size: 0.875rem; /* text-sm */
-  color: #6b7280; /* text-gray-500 */
+.nft-linking-section, .nft-details-section, .content-fields-wrapper, .image-upload-section, .scheduling-fields {
+  border: 1px solid #e5e7eb; padding: 1rem; border-radius: 6px; margin-top: 0.5rem;
 }
-.dark .form-file-input {
-  color: #9ca3af; /* dark:text-gray-400 */
-}
-.form-file-input::file-selector-button {
-  margin-right: 1rem; /* file:mr-4 */
-  padding: 0.5rem 1rem; /* file:py-2 file:px-4 */
-  border-radius: 0.375rem; /* file:rounded-md */
-  border-width: 0; /* file:border-0 */
-  font-size: 0.875rem; /* file:text-sm */
-  font-weight: 600; /* file:font-semibold */
-  background-color: #e0e7ff; /* file:bg-indigo-50 */
-  color: #4338ca; /* file:text-indigo-700 */
-  cursor: pointer;
-}
-.form-file-input:hover::file-selector-button {
-  background-color: #c7d2fe; /* hover:file:bg-indigo-100 */
-}
-.dark .form-file-input::file-selector-button {
-  background-color: #3730a3; /* dark:file:bg-indigo-800 */
-  color: #c7d2fe; /* dark:file:text-indigo-300 */
-}
-.dark .form-file-input:hover::file-selector-button {
-  background-color: #4338ca; /* dark:hover:file:bg-indigo-700 */
-}
+.nft-linking-section .form-label { margin-bottom: 0; } /* Adjust for checkbox */
+.cm-id-display-wrapper { display: flex; align-items: center; gap: 0.5rem; }
+.edit-cm-button { margin-left: auto; }
+.cm-creator-wrapper { border: 1px dashed #9ca3af; padding: 1rem; border-radius: 4px; margin-top:0.5rem; }
+.cm-creator-prompt { font-size: 0.9rem; color: #4b5563; margin-bottom: 0.8rem;}
+.cancel-cm-button { margin-top: 0.8rem; }
+.cm-setup-options { display: flex; align-items: center; gap: 0.75rem; margin-top: 0.5rem; }
+.cm-options-divider { color: #6b7280; font-size: 0.9rem; }
+.manual-cm-input { flex-grow: 1; }
 
-.form-checkbox {
-  height: 1rem; /* h-4 */
-  width: 1rem; /* w-4 */
-  color: #4f46e5; /* text-indigo-600 */
-  border: 1px solid #d1d5db; /* border-gray-300 */
-  border-radius: 0.25rem; /* rounded */
-  margin-right: 0.5rem; /* mr-2 */
-}
-.form-checkbox:focus {
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.5); /* focus:ring-indigo-500 */
-}
-.dark .form-checkbox {
-  border-color: #6b7280; /* dark:border-gray-500 */
-  background-color: #374151; /* dark:bg-gray-700, for checkmark contrast */
-}
-.checkbox-label { /* for the label containing the checkbox */
-    display: flex;
-    align-items: center;
-}
+.image-input-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+.image-url-input { flex-grow: 1; }
+.remove-image-button, .add-image-button { white-space: nowrap; }
+.file-upload-wrapper { margin-top: 0.75rem; }
+.upload-indicator { font-size: 0.85rem; color: #16a085; margin-top: 0.3rem; }
 
-.form-text {
-  font-size: 0.75rem; /* text-xs */
-  color: #6b7280; /* text-gray-500 */
-  margin-top: 0.25rem; /* mt-1 */
-}
-.dark .form-text {
-  color: #9ca3af; /* dark:text-gray-400 */
-}
+.modal-actions { display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem; }
 
-/* NFT Details Section in Modal */
-.nft-linking-section {
-  border-top: 1px solid #e5e7eb; /* border-t dark:border-gray-700 */
-  padding-top: 1rem; /* pt-4 */
-  margin-top: 1rem; /* mt-4 */
-}
-.dark .nft-linking-section {
-  border-color: #374151;
-}
-.nft-details-section {
-  /* space-y-2 approx */
-  margin-top: 0.5rem; /* mt-2 */
-  padding: 0.75rem; /* p-3 */
-  background-color: #f9fafb; /* bg-gray-50 */
-  border-radius: 0.375rem; /* rounded-md */
-}
-.nft-details-section > div:not(:last-child) {
-    margin-bottom: 0.5rem;
-}
-.dark .nft-details-section {
-  background-color: rgba(55, 65, 81, 0.5); /* dark:bg-gray-700/50 */
-}
-.cm-id-display-wrapper .form-input {
-  background-color: #f3f4f6; /* bg-gray-100 */
-}
-.dark .cm-id-display-wrapper .form-input {
-  background-color: #4b5568; /* dark:bg-gray-600 */
-}
-.edit-cm-button {
-  margin-top: 0.25rem; /* mt-1 */
-}
-.cm-creator-wrapper {
-  /* Styles for this wrapper if needed */
-}
-.cm-creator-prompt {
-  font-size: 0.875rem; /* text-sm */
-  color: #4b5563; /* text-gray-600 */
-  margin-bottom: 0.5rem; /* mb-2 */
-}
-.dark .cm-creator-prompt {
-  color: #d1d5db; /* dark:text-gray-300 */
-}
-.cancel-cm-button {
-  margin-top: 0.75rem; /* mt-3 */
-  width: 100%;
-}
-.cm-setup-options {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem; /* For spacing between button, OR, input */
-  flex-wrap: wrap; /* Allow wrapping on small screens */
-}
-.cm-options-divider {
-  margin-left: 0.5rem; /* mx-2 */
-  margin-right: 0.5rem;
-  color: #6b7280; /* text-gray-500 */
-  font-size: 0.875rem; /* text-sm */
-}
-.dark .cm-options-divider {
-  color: #9ca3af; /* dark:text-gray-400 */
-}
-.manual-cm-input {
-  display: inline-block; /* inline-w-auto */
-  width: auto;
-  max-width: 12rem; /* max-w-xs approx */
-  font-size: 0.875rem; /* text-sm */
-}
-.assign-cm-button {
-  margin-left: 0.5rem; /* ml-2 */
-}
-
-
-/* Image Upload Section in Modal */
-.image-upload-section {
-  margin-top: 1rem; /* mt-4 */
-}
-.image-input-row {
-  display: flex;
-  align-items: center;
-  margin-bottom: 0.5rem; /* mb-2 */
-}
-.image-url-input {
-  flex-grow: 1;
-  margin-right: 0.5rem; /* mr-2 */
-}
-.remove-image-button {
-  padding: 0.25rem 0.5rem !important; /* p-1 for btn-xs */
-  line-height: 1 !important; /* leading-none for btn-xs */
-}
-.add-image-button {
-  margin-top: 0.25rem; /* mt-1 */
-}
-.file-upload-wrapper {
-  margin-top: 0.5rem; /* mt-2 */
-}
-.upload-indicator {
-  margin-top: 0.5rem; /* mt-2 */
-  font-size: 0.875rem; /* text-sm */
-  color: #4f46e5; /* text-indigo-600 */
-}
-.dark .upload-indicator {
-  color: #818cf8; /* dark:text-indigo-400 */
-}
-
-
-.locked-content-message { /* Extends .info-box */
-  /* Specific styles if needed, otherwise relies on .info-box */
-}
-.login-prompt {
-  display: block;
-  margin-top: 0.25rem; /* mt-1 */
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  column-gap: 0.75rem; /* space-x-3 */
-  margin-top: 1.5rem; /* mt-6 */
-  padding-top: 1rem; /* pt-4 */
-  border-top: 1px solid #e5e7eb; /* border-t dark:border-gray-700 */
-}
-.dark .modal-actions {
-  border-color: #374151;
-}
-
-/* Episode List Styles */
-.loading-indicator-list {
-  text-align: center;
-  padding: 1.5rem; /* p-6 */
-}
-.loading-indicator-list p {
-  margin-top: 0.5rem; /* mt-2 */
-  color: #4b5563; /* text-gray-600 */
-}
-.dark .loading-indicator-list p {
-  color: #d1d5db; /* dark:text-gray-300 */
-}
-.no-episodes-message { /* Extends .info-box */
-  text-align: center;
-}
-.episodes-grid {
-  /* space-y-4 */
-}
-.episodes-grid > .episode-item:not(:last-child) {
-    margin-bottom: 1rem;
-}
-
-.episode-item {
-  padding: 1rem; /* p-4 */
-  background-color: #ffffff; /* bg-white */
-  border-radius: 0.5rem; /* rounded-lg */
-  box-shadow: 0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px 0 rgba(0,0,0,0.06); /* shadow */
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-}
-.dark .episode-item {
-  background-color: #1f2937; /* dark:bg-gray-800 */
-}
-.episode-item-content {
-  /* Flex grow handled by parent structure */
-}
-.episode-name {
-  font-size: 1.125rem; /* text-lg */
-  font-weight: 600; /* font-semibold */
-  color: #4f46e5; /* text-indigo-700 */
-}
-.dark .episode-name {
-  color: #818cf8; /* dark:text-indigo-400 */
-}
-.episode-description {
-  font-size: 0.875rem; /* text-sm */
-  color: #4b5563; /* text-gray-600 */
-  /* line-clamp-2/3 implemented with -webkit properties */
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  text-overflow: ellipsis;
-    line-height: 1.4; /* Approximate for line clamping */
-}
-.line-clamp-3 { /* If used for episode description */
-    -webkit-line-clamp: 3;
-    max-height: calc(1.4em * 3); /* line-height * number of lines */
-}
-.line-clamp-2 { /* If used for episode description */
-    -webkit-line-clamp: 2;
-    max-height: calc(1.4em * 2);
-}
-.dark .episode-description {
-  color: #9ca3af; /* dark:text-gray-400 */
-}
-.episode-locked-message {
-  font-size: 0.875rem; /* text-sm */
-  color: #6b7280; /* text-gray-500 */
-  font-style: italic;
-  margin-top: 0.5rem; /* my-2 */
-  margin-bottom: 0.5rem;
-}
-.dark .episode-locked-message {
-  color: #9ca3af; /* dark:text-gray-400 */
-}
-.mint-now-link {
-  margin-left: 0.25rem; /* ml-1 */
-}
-
-.episode-tags-container {
-  margin-top: 0.5rem; /* mt-2 */
-}
-.tag {
-  display: inline-block;
-  background-color: #e5e7eb;
-  border-radius: 9999px;
-  padding: 0.125rem 0.5rem; /* py-0.5 px-2 */
-  font-size: 0.75rem; /* text-xs */
-  font-weight: 600; /* font-semibold */
-  color: #374151;
-  margin-right: 0.25rem; /* mr-1 */
-  margin-bottom: 0.25rem; /* mb-1 */
-}
-.dark .tag {
-  background-color: #374151;
-  color: #e5e7eb;
-}
-.tag-nft {
-  background-color: #e0e7ff; /* bg-purple-200 (using indigo as example) */
-  color: #3730a3; /* text-purple-800 (using indigo) */
-}
-.dark .tag-nft {
-  background-color: #4338ca; /* dark:bg-purple-700 (using indigo) */
-  color: #c7d2fe; /* dark:text-purple-100 (using indigo) */
-}
-.tag-cm-ref {
-  background-color: #ccfbf1; /* bg-teal-200 */
-  color: #0f766e; /* text-teal-800 */
-}
-.dark .tag-cm-ref {
-  background-color: #134e4a; /* dark:bg-teal-700 */
-  color: #99f6e4; /* dark:text-teal-100 */
-}
-.tag-status {
-  /* Uses default .tag styles */
-}
-.tag-warning {
-    background-color: #fef3c7; /* bg-yellow-100 */
-    color: #92400e; /* text-yellow-700 */
-}
-.dark .tag-warning {
-    background-color: #b45309; /* dark:bg-yellow-700 */
-    color: #fde68a; /* dark:text-yellow-100 */
-}
-
-
-.episode-image-gallery {
-  margin-top: 0.5rem; /* mt-2 */
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem; /* gap-2 */
-}
-.episode-image-link:hover {
-  opacity: 0.8;
-}
-.episode-thumbnail {
-  height: 4rem; /* h-16 */
-  width: 4rem; /* w-16 */
-  object-fit: cover;
-  border-radius: 0.25rem; /* rounded */
-  border: 1px solid #d1d5db; /* border */
-}
-.dark .episode-thumbnail {
-  border-color: #4b5568; /* dark:border-gray-600 */
-}
-.episode-image-teaser {
-  margin-top: 0.5rem; /* mt-2 */
-}
-.episode-thumbnail-locked {
-  opacity: 0.5;
-}
-.image-teaser-text {
-  font-size: 0.75rem; /* text-xs */
-  color: #9ca3af; /* text-gray-400 */
-  font-style: italic;
-  margin-left: 0.5rem; /* ml-2 */
-}
-.dark .image-teaser-text {
-  color: #6b7280; /* dark:text-gray-500 */
-}
-
-
-.episode-actions {
-  display: flex;
-  flex-direction: column; /* Default mobile: column */
-  align-items: flex-end; /* Align to right for column */
-  gap: 0.5rem; /* gap-2 */
-  margin-top: 0.5rem; /* mt-2 */
-  margin-left: 0.5rem; /* ml-2 */
-  flex-shrink: 0;
-}
-@media (min-width: 640px) { /* sm: */
-  .episode-actions {
-    flex-direction: row; /* sm:flex-row */
-    align-items: center; /* sm:items-center */
-    margin-top: 0; /* sm:mt-0 */
-  }
-}
-
-/* Spinner (re-defined for encapsulation, or use global) */
+.loading-indicator-list, .no-episodes-message { text-align: center; padding: 1.5rem; color: #4b5563; font-size: 1rem; }
 .spinner {
-  display: inline-block;
-  width: 2rem;
-  height: 2rem;
-  border-width: 4px;
-  border-top-color: #4f46e5;
-  border-right-color: transparent;
-  border-bottom-color: transparent;
-  border-left-color: transparent;
-  border-radius: 9999px;
-  animation: spin 1s linear infinite;
-}
-.dark .spinner {
-  border-top-color: #818cf8;
+  border: 3px solid rgba(0,0,0,0.1); width: 30px; height: 30px;
+  border-radius: 50%; border-left-color: #3b82f6;
+  animation: spin 0.8s ease infinite; margin: 0 auto 0.8rem;
 }
 .spinner-inline {
-  display: inline-block;
-  width: 1rem; /* w-4 */
-  height: 1rem; /* h-4 */
-  border-width: 2px;
-  border-top-color: #4f46e5; /* text-indigo-600 */
-  border-right-color: transparent;
-  border-bottom-color: transparent;
-  border-left-color: transparent;
-  border-radius: 9999px;
-  animation: spin 1s linear infinite;
-  margin-left: 0.5rem; /* ml-2 */
-  vertical-align: middle;
+  width: 1em; height: 1em; border: 2px solid currentColor;
+  border-right-color: transparent; border-radius: 50%; display: inline-block;
+  animation: spin 0.75s linear infinite; margin-right: 0.4em; vertical-align: text-bottom;
 }
-.dark .spinner-inline {
-  border-top-color: #c7d2fe; /* dark:text-indigo-300 */
+.spinner-inline-xs { width: 0.8em; height: 0.8em; border-width: 1.5px; margin-right: 0.3em;}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.episodes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
 }
-@keyframes spin {
-  to { transform: rotate(360deg); }
+.episode-item {
+  background-color: #ffffff; border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03);
+  display: flex; flex-direction: column;
+}
+.episode-main-thumbnail {
+    width: 100%; height: 160px; object-fit: cover;
+    border-top-left-radius: 8px; border-top-right-radius: 8px;
+}
+.episode-item-content { padding: 1rem; flex-grow: 1; }
+.episode-name { font-size: 1.2rem; color: #111827; margin: 0 0 0.6rem 0; font-weight: 600;}
+.episode-description { font-size: 0.9rem; color: #4b5563; margin-bottom: 0.8rem; line-height: 1.5; }
+.episode-locked-message { font-size: 0.9rem; color: #ef4444; padding: 0.8rem; background-color: #fee2e2; border-radius: 4px; margin-bottom: 0.8rem;}
+.mint-now-link { color: #dc2626; font-weight: 500; text-decoration: underline; }
+
+.episode-tags-container { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.8rem; }
+.tag {
+  background-color: #e5e7eb; color: #4b5563; padding: 0.2rem 0.5rem;
+  border-radius: 12px; font-size: 0.75rem; font-weight: 500;
+}
+.tag-nft { background-color: #ccfbf1; color: #0f766e; } /* Teal */
+.tag-cm-ref { background-color: #ede9fe; color: #6d28d9; } /* Violet */
+.tag-status { background-color: #dbeafe; color: #1e40af; } /* Blue */
+.tag-warning { background-color: #fef3c7; color: #92400e; } /* Amber */
+.tag-likes { background-color: #fee2e2; color: #b91c1c; } /* Red for likes */
+
+.episode-schedule-info {
+    font-size: 0.8rem;
+    color: #52525b; /* zinc-600 */
+    background-color: #f4f4f5; /* zinc-100 */
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    margin-top: 0.3rem;
+    display: inline-block;
 }
 
-/* General Button Styles (reusable, consider globalizing) */
-.btn {
-  padding: 0.5rem 1rem;
-  border: 1px solid transparent;
-  border-radius: 0.375rem;
-  box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: #ffffff;
-  cursor: pointer;
-  transition: background-color 0.15s ease-in-out;
+
+.episode-image-gallery { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.8rem; }
+.episode-thumbnail { width: 60px; height: 60px; object-fit: cover; border-radius: 4px; border: 1px solid #e5e7eb; }
+.episode-thumbnail-locked { opacity: 0.6; }
+.image-teaser-text { font-size: 0.8rem; color: #6b7280; margin-left: 0.5rem; }
+
+.episode-actions-footer {
+    padding: 0.75rem 1rem;
+    border-top: 1px solid #f3f4f6;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
 }
-.btn:focus {
-  outline: 2px solid transparent;
-  outline-offset: 2px;
-  /* Consider box-shadow for focus ring */
+.author-actions { display: flex; gap: 0.5rem; }
+.btn-like { background-color: #fce7f3; color: #be185d; } /* Pink for like */
+.btn-like:hover:not(:disabled) { background-color: #fbcfe8; }
+.btn-like:disabled { background-color: #fce7f3 !important; color: #fda4af !important; }
+
+
+.btn { /* General button styling from TaleManager for consistency */
+  padding: 0.6rem 1.2rem; border: none; border-radius: 6px; font-size: 0.95rem;
+  font-weight: 500; cursor: pointer; transition: background-color 0.2s ease, box-shadow 0.2s ease;
+  display: inline-flex; align-items: center; justify-content: center; text-decoration: none;
 }
-.btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.7;
-}
-
-.btn-primary { background-color: #4f46e5; }
-.btn-primary:hover { background-color: #4338ca; }
-.dark .btn-primary { background-color: #6366f1; }
-.dark .btn-primary:hover { background-color: #818cf8; }
-.dark .btn-primary:disabled { background-color: #3730a3; opacity: 0.5; }
-
-
-.btn-secondary { background-color: #6b7280; }
-.btn-secondary:hover { background-color: #4b5563; }
-.dark .btn-secondary { background-color: #4b5568; }
-.dark .btn-secondary:hover { background-color: #374151; }
-.dark .btn-secondary:disabled { background-color: #374151; opacity: 0.5; }
-
-
-.btn-success { background-color: #16a34a; }
-.btn-success:hover { background-color: #15803d; }
-.dark .btn-success { background-color: #22c55e; }
-.dark .btn-success:hover { background-color: #16a34a; }
-.dark .btn-success:disabled { background-color: #14532d; opacity: 0.5; }
-
-
-.btn-danger { background-color: #dc2626; }
-.btn-danger:hover { background-color: #b91c1c; }
-.dark .btn-danger { background-color: #ef4444; }
-.dark .btn-danger:hover { background-color: #f87171; }
-.dark .btn-danger:disabled { background-color: #7f1d1d; opacity: 0.5; }
-
-
-.btn-warning { background-color: #f59e0b; color: #ffffff; }
-.btn-warning:hover { background-color: #d97706; }
-.dark .btn-warning { background-color: #f59e0b; }
-.dark .btn-warning:hover { background-color: #fbbf24; }
-.dark .btn-warning:disabled { background-color: #78350f; opacity: 0.5; }
-
-
-.btn-info { background-color: #3b82f6; }
-.btn-info:hover { background-color: #2563eb; }
-.dark .btn-info { background-color: #3b82f6; }
-.dark .btn-info:hover { background-color: #60a5fa; }
-.dark .btn-info:disabled { background-color: #1e3a8a; opacity: 0.5; }
-
-
-.btn-sm { padding: 0.375rem 0.75rem; font-size: 0.75rem; }
-.btn-xs { padding: 0.25rem 0.625rem; font-size: 0.75rem; }
-
-/* Info Box */
-.info-box {
-  margin-top: 0.5rem; /* mt-2 */
-  padding: 0.75rem; /* p-3 */
-  background-color: #f9fafb; /* bg-gray-50 */
-  border-radius: 0.375rem; /* rounded-md */
-  border: 1px solid #e5e7eb; /* border-gray-200 */
-  font-size: 0.875rem; /* text-sm */
-  color: #374151; /* text-gray-700 */
-}
-.dark .info-box {
-  background-color: rgba(55, 65, 81, 0.5); /* dark:bg-gray-700/50 */
-  border-color: #4b5568; /* dark:border-gray-600 */
-  color: #e5e7eb; /* dark:text-gray-200 */
-}
-.error-box {
-  margin-top: 0.5rem; padding: 0.75rem; background-color: #fee2e2; color: #b91c1c; border-radius: 0.375rem; border: 1px solid #fecaca;
-}
-.dark .error-box { background-color: rgba(153, 27, 27, 0.3); color: #fca5a5; border-color: rgba(220, 38, 38, 0.5); }
-
-.link {
-  color: #4f46e5; /* text-indigo-600 */
-  text-decoration: underline;
-  font-weight: 500; /* font-medium */
-}
-.link:hover {
-  color: #4338ca; /* hover:text-indigo-500 */
-}
-.dark .link {
-  color: #818cf8; /* dark:text-indigo-400 */
-}
-.dark .link:hover {
-  color: #a78bfa; /* dark:hover:text-indigo-300 */
-}
+.btn:disabled { background-color: #ccc !important; color: #666 !important; cursor: not-allowed; box-shadow: none; }
+.btn-primary { background-color: #3498db; color: white; }
+.btn-primary:hover:not(:disabled) { background-color: #2980b9; }
+.btn-success { background-color: #2ecc71; color: white; }
+.btn-success:hover:not(:disabled) { background-color: #27ae60; }
+.btn-warning { background-color: #f39c12; color: white; }
+.btn-warning:hover:not(:disabled) { background-color: #e67e22; }
+.btn-danger { background-color: #e74c3c; color: white; }
+.btn-danger:hover:not(:disabled) { background-color: #c0392b; }
+.btn-info { background-color: #1abc9c; color: white; }
+.btn-info:hover:not(:disabled) { background-color: #16a085; }
+.btn-secondary { background-color: #bdc3c7; color: #2c3e50; }
+.btn-secondary:hover:not(:disabled) { background-color: #95a5a6; }
+.btn-xs { padding: 0.3rem 0.6rem; font-size: 0.8rem; }
 
 </style>

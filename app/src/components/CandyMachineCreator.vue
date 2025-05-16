@@ -50,6 +50,8 @@
         </div>
          <input type="hidden" v-model="cmConfig.symbol" />
         <input type="hidden" v-model="cmConfig.creatorsJson" />
+        <label for="collectionImage">Collection Image:</label>
+        <input type="file" id="collectionImage" @change="handleImageUpload" accept="image/*" />
 
       </fieldset>
 
@@ -81,7 +83,7 @@
       </fieldset>
 
       <button type="submit" :disabled="isLoading || !wallet.connected.value" class="btn btn-success cm-submit-button">
-        {{ isLoading ? 'Creating CM...' : 'Create Candy Machine for Episode' }}
+        {{ isLoading ? 'Creating CM...' : 'Create Candy Machine' }}
       </button>
     </form>
 
@@ -131,22 +133,57 @@ import { base58 } from '@metaplex-foundation/umi/serializers';
 import { createCollection } from '@metaplex-foundation/mpl-core'
 import { initWallet } from '../services/walletService';
 import { uploadFileToIPFS, uploadJsonToIPFS } from '../services/pinataService';
-
+import { Program, AnchorProvider } from '@coral-xyz/anchor';
+import axios from 'axios'
 // Using @solana/web3.js's PublicKey for type annotation from useWallet if needed, but mostly dealing with UMI's PublicKey
-import { PublicKey, PublicKey as SolanaWeb3JsPublicKey } from '@solana/web3.js';
+import { PublicKey, PublicKey as SolanaWeb3JsPublicKey,Connection } from '@solana/web3.js';
+const AUTH_API_BASE_URL = import.meta.env.VITE_APP_AUTH_API_URL || 'http://localhost:3000/api';
 
 const RPC_ENDPOINT = import.meta.env.VITE_RPC_ENDPOINT || 'https://api.devnet.solana.com';
 const WALLET_PLACEHOLDER = "YOUR_WALLET_ADDRESS_PLACEHOLDER";
+const JWT_TOKEN_KEY = 'readium_fun_jwt_token';
 
 const wallet = useWallet(); // wallet.publicKey.value is a SolanaWeb3JsPublicKey | null
+const connection = new Connection(RPC_ENDPOINT, "confirmed");
 const emit = defineEmits(['candyMachineCreated']);
 const isLoading = ref(false);
+const appUser = ref(null);
+const isLoadingUser = ref(false);
+const nftList = ref(null);
 const successMessage = ref('');
 const errorMessage = ref('');
 const createdCandyMachineId = ref('');
 const createdCollectionId = ref('');
 const transactionSignature = ref('');
-
+import idlFromFile from '../anchor/tale_nft.json';
+const PROGRAM_ID = new SolanaWeb3JsPublicKey(idlFromFile.address);
+const idl = idlFromFile;
+let provider;
+let program;
+// --- Watcher for wallet connection ---
+watch(() => wallet.connected.value, (isConnected) => {
+  if (isConnected && wallet.publicKey.value) {
+    if (!program || provider?.wallet?.publicKey?.toBase58() !== wallet.publicKey.value.toBase58()) {
+        if (wallet.wallet.value && wallet.wallet.value.adapter) {
+            provider = new AnchorProvider(connection, wallet.wallet.value.adapter, AnchorProvider.defaultOptions());
+            try {
+                program = new Program(idl, provider);
+                console.log("TaleManager: Anchor Program Initialized.");
+            } catch (e) {
+                console.error("TaleManager: Error initializing Anchor Program:", e);
+                showUiMessage(`Failed to initialize on-chain program: ${e.message}`, "error");
+                program = null; provider = null; return;
+            }
+        } else {
+            console.error("TaleManager: Wallet adapter not available.");
+            program = null; provider = null; return;
+        }
+    }
+    fetchAppUser();
+  } else {
+    program = null; provider = null; appUser.value = null; nftList.value = [];
+  }
+}, { immediate: true });
 // // --- UMI Instance ---
 // const umi = computed(() => {
 //   if (wallet.connected.value && wallet.publicKey.value) {
@@ -158,6 +195,40 @@ const transactionSignature = ref('');
 //   return null;
 // });
 
+// --- API Client for Auth ---
+const authApiClient = axios.create({ baseURL: AUTH_API_BASE_URL });
+authApiClient.interceptors.request.use(config => {
+  const token = localStorage.getItem(JWT_TOKEN_KEY);
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+authApiClient.interceptors.response.use(
+  response => response.data,
+  error => {
+    const msg = error.response?.data?.message || error.message || 'An API error occurred.';
+    showUiMessage(msg, 'error');
+    if (error.response?.status === 401 && error.response?.data?.message?.includes("token failed")) {
+        localStorage.removeItem(JWT_TOKEN_KEY);
+        appUser.value = null;
+    }
+    return Promise.reject(error.response?.data || { message: msg, error });
+  }
+);
+async function fetchAppUser() {
+  const token = localStorage.getItem(JWT_TOKEN_KEY);
+  if (!token || !wallet.connected.value) { appUser.value = null; return; }
+  isLoadingUser.value = true;
+  try {
+    const response = await authApiClient.get('/auth/me');
+    appUser.value = response.success ? response.data : null;
+    if (!response.success) localStorage.removeItem(JWT_TOKEN_KEY);
+  } catch (error) {
+    console.error("TaleManager: Failed to fetch app user:", error);
+    appUser.value = null;
+  } finally {
+    isLoadingUser.value = false;
+  }
+}
 // --- Form Data Refs ---
 const collectionConfig = ref({
   name: 'My Awesome Collection',
@@ -558,7 +629,38 @@ async function handleCreateCandyMachine() {
     }
     successMessage.value += `All ${items.value.length} items inserted successfully!`;
     console.log("All items inserted.");
-    emit('candyMachineCreated', candyMachine.publicKey.toString());
+     // --- 7. Call list_nft from tale_nft program ---
+     console.log("Listing Collection NFT with Candy Machine on-chain via tale_nft program...");
+    if (!taleNftProgram) { // Ensure taleNftProgram is initialized
+        // Attempt to re-initialize if it wasn't set up earlier
+        // This is a fallback, ideally it's initialized once wallet connects
+        // @ts-ignore
+        const provider = new AnchorProvider(umi.rpc.connection, wallet.value, AnchorProvider.defaultOptions());
+        anchorProvider = provider; // Not strictly needed again if already set, but for completeness
+        // taleNftProgram = new Program(YOUR_IDL_NAME as Idl, TALE_NFT_PROGRAM_ID, provider); // REPLACE YOUR_IDL_NAME
+         if (!taleNftProgram) { // If still not initialized (e.g. IDL missing)
+            throw new Error("Tale NFT Anchor program could not be initialized. Make sure YOUR_IDL_NAME is set.");
+        }
+    }
+    
+    const collectionMintPkForListing = new SolanaWeb3JsPublicKey(createdCollectionId.value); // From collectionMintSigner.publicKey
+    const candyMachinePkForListing = new SolanaWeb3JsPublicKey(createdCandyMachineId.value); // From candyMachineSigner.publicKey
+
+    // @ts-ignore
+    const listNftTx = await taleNftProgram.methods
+      .listNft(collectionMintPkForListing, candyMachinePkForListing)
+      .accounts({
+        // listedNftAccount: PDA will be derived by Anchor
+        creatorWallet: wallet.publicKey.value, // Signer (SolanaWeb3JsPublicKey)
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc({ commitment: 'processed' });
+    
+    console.log(`list_nft transaction successful. Signature: ${listNftTx}`);
+    successMessage.value += `Collection NFT listed with CM on-chain (TX: ${listNftTx}).`;
+
+    // No longer emitting: emit('candyMachineCreated', createdCandyMachineId.value);
+    console.log("Candy Machine creation and on-chain listing process complete.");
   } catch (e: any) {
     console.error("Creation failed:", e);
     let detailedMessage = e.message || 'An unknown error occurred during creation.';
