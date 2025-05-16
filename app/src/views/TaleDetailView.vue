@@ -1,4 +1,4 @@
-<template>
+<!-- <template>
   <div class="tale-detail-view-container">
     <div v-if="viewUiMessage.text"
          :class="['view-ui-message', `view-ui-message-${viewUiMessage.type}`]">
@@ -57,6 +57,96 @@
       </div>
     </div>
   </div>
+</template> -->
+
+<template>
+  <div class="min-h-screen bg-purple-950 text-white">
+    <!-- Main Content -->
+    <main class="max-w-6xl mx-auto px-4 py-8">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Series Info - Left and Middle Columns -->
+        <div class="lg:col-span-2 bg-purple-600 rounded-xl p-6 relative overflow-hidden">
+          <!-- Grid Background -->
+          <div class="absolute inset-0 opacity-10">
+            <div class="w-full h-full grid grid-cols-12 grid-rows-12">
+              <div v-for="i in 144" :key="i" class="border border-white"></div>
+            </div>
+          </div>
+          
+          <div class="relative z-10">
+            <div class="flex flex-col md:flex-row gap-6">
+              <div class="md:w-1/2">
+                <h1 class="text-3xl font-bold mb-4">{{ taleOnChainAccountData.title }}</h1>
+                <p class="text-sm mb-6">
+                  {{  fetchedIpfsFullContent }}
+                  <!-- In a quiet village in ancient Java, a lonely old widow longs for a child. One day, she receives a magical cucumber seed from a mysterious hermit. From this golden cucumber, a baby girl is born—Timun Mas. -->
+                </p>
+                <div class="flex items-center gap-2">
+                  <span class="text-sm text-gray-200">a series from</span>
+                  <div class="flex items-center gap-1">
+                    <div class="w-5 h-5 rounded-full bg-green-400"></div>
+                    <span class="text-sm font-medium">{{ shortenAddress(taleOnChainAccountData.author.toString()) }}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="md:w-1/2">
+                <img 
+                  :src="`https://gateway.pinata.cloud/ipfs/${taleOnChainAccountData.coverImageCid}`"
+                  alt="The Story of Timun mas" 
+                  class="w-full rounded-lg object-cover"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stats - Right Column -->
+        <div class="bg-gray-900/50 backdrop-blur-sm rounded-xl p-6">
+          <div class="flex items-center gap-2 mb-4">
+            <span class="w-3 h-3 bg-green-500 rounded-full"></span>
+            <span class="font-medium">Ongoing</span>
+          </div>
+          
+          <!-- <div class="flex items-center gap-2 mb-6 text-sm text-gray-300">
+            <span>Scheduled Upload</span>
+            <div class="flex items-center gap-1">
+              <span class="i-lucide-calendar text-sm"></span>
+              <span>13th May 01:00 AM</span>
+            </div>
+          </div> -->
+          
+          <div class="flex justify-between items-center mb-4">
+            <!-- <div class="flex items-center gap-2">
+              <span class="font-medium">98K Views</span>
+            </div> -->
+            <div class="flex items-center">
+              <!-- <div class="flex -space-x-1 mr-2">
+                <div class="w-6 h-6 rounded-full border border-white bg-gray-300"></div>
+                <div class="w-6 h-6 rounded-full border border-white bg-gray-400"></div>
+                <div class="w-6 h-6 rounded-full border border-white bg-gray-500"></div>
+              </div> -->
+              <span class="bg-yellow-400 text-black text-xs px-2 py-1 rounded-full">{{ taleOnChainAccountData.likeCount }} Likes</span>
+            </div>
+          </div>
+          
+          <button @click="handleLikeEpisode(taleOnChainAccountData.taleId)" class="w-full bg-purple-600 hover:bg-purple-500 text-white py-3 rounded-lg font-medium transition">
+            Like This
+          </button>
+        </div>
+      </div>
+      <EpisodeManager
+        v-if="taleBackendDoc && taleOnChainPdaString && taleOnChainAccountData"
+        :parentTale="{
+            mongoId: taleBackendDoc._id,
+            onChainPdaString: taleOnChainPdaString,
+            onChainAccountData: taleOnChainAccountData
+        }"
+        :appUser="appUser"
+        :userMintActivities="userMintActivities"
+      />
+      
+    </main>
+  </div>
 </template>
 
 <script setup>
@@ -70,7 +160,7 @@ import { Program, AnchorProvider } from '@coral-xyz/anchor';
 import { Buffer } from 'buffer';
 
 import EpisodeManager from '../components/EpisodeManager.vue';
-
+const isLikingEpisode = ref({});
 // --- Configuration ---
 const TALES_API_BASE_URL = import.meta.env.VITE_APP_AUTH_API_URL || 'http://localhost:3000/api';
 const AUTH_API_BASE_URL = TALES_API_BASE_URL;
@@ -103,7 +193,7 @@ const fetchedIpfsFullContent = ref('');
 const ipfsFullContentLoading = ref(false);
 const ipfsFullContentError = ref('');
 const viewUiMessage = ref({ text: '', type: 'info' });
-
+const description = ref('')
 const route = useRoute();
 const router = useRouter();
 
@@ -135,6 +225,41 @@ watch(() => wallet.connected.value, (isConnected) => {
     taleOnChainAccountData.value = null; taleBackendDoc.value = null; fetchedIpfsFullContent.value = '';
   }
 }, { immediate: true });
+
+async function handleLikeEpisode(episodePdaString) {
+    if (!program || !wallet.publicKey.value) {
+        showUiMessage("Please connect your wallet to like an episode.", "warning");
+        return;
+    }
+    isLikingEpisode.value = { ...isLikingEpisode.value, [episodePdaString]: true };
+    // showUiMessage("Liking episode...", "loading", null, 0);
+    try {
+        const txSignature = await program.methods.likeTale()
+            .accounts({
+                episodeAccount: new PublicKey(episodePdaString),
+                user: wallet.publicKey.value,
+            })
+            .rpc();
+        // showUiMessage("Episode liked!", "success", txSignature);
+        // Optimistically update or re-fetch
+        const episodeIndex = fetchedOnChainEpisodes.value.findIndex(ep => ep.publicKey.toString() === episodePdaString);
+        if (episodeIndex !== -1) {
+            const currentLikes = fetchedOnChainEpisodes.value[episodeIndex].account.likeCount;
+            // Ensure likeCount is treated as BN if it comes as such from chain, then convert for UI
+            const newLikes = currentLikes instanceof BN ? currentLikes.add(new BN(1)) : new BN((Number(currentLikes) || 0) + 1);
+            fetchedOnChainEpisodes.value[episodeIndex].account.likeCount = newLikes; // Update local state
+        }
+        // Or, for guaranteed consistency: await fetchAllEpisodeData();
+    } catch (error) {
+        console.error("Error liking episode:", error);
+        let errorMsg = error.message || "Failed to like episode.";
+        if (error.logs) errorMsg += ` Logs: ${error.logs.join(', ')}`;
+        showUiMessage(errorMsg, "error", error.signature);
+    } finally {
+        isLikingEpisode.value = { ...isLikingEpisode.value, [episodePdaString]: false };
+        if (uiMessage.value.type === 'loading') showUiMessage("","info");
+    }
+}
 
 // --- Utility Functions ---
 function showViewUiMessage(msg, type = 'info', duration = 5000) {
@@ -223,6 +348,7 @@ async function loadAllTaleData(onChainTaleIdSeedFromRoute) {
     taleOnChainPdaString.value = pda.toString(); // Store the PDA string
     console.log(`Fetching on-chain tale data for PDA: ${taleOnChainPdaString.value}`);
     const fetchedTale = await program.account.tale.fetch(pda);
+    console.log(fetchedTale)
     taleOnChainAccountData.value = fetchedTale;
     console.log("Fetched on-chain tale:", taleOnChainAccountData.value);
 
@@ -277,7 +403,6 @@ async function loadAllTaleData(onChainTaleIdSeedFromRoute) {
     isLoadingInitialData.value = false;
   }
 }
-
 function goBack() {
   if (window.history.length > 2) {
     router.go(-1);

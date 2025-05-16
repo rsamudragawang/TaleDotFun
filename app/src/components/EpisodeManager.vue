@@ -1,4 +1,4 @@
-<template>
+<!-- <template>
   <div class="episode-manager-container">
     <h2 class="main-section-title">
       Episodes for "{{ parentTale?.onChainAccountData?.title || 'Tale' }}"
@@ -209,6 +209,91 @@
       </div>
     </div>
   </div>
+</template> -->
+<template>
+  <!-- Chapter Lists and NFTs Collection -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
+    <!-- Chapter Lists -->
+    <div class="lg:col-span-2">
+      <div class="flex items-center gap-3 mb-4">
+        <h2 class="text-xl font-bold">Chapter Lists</h2>
+        <span class="bg-gray-800 text-white text-xs px-3 py-1 rounded-full">{{ combinedEpisodes.length }} Chapter</span>
+      </div>
+
+      <div class="space-y-4">
+        
+        <div v-for="episode in combinedEpisodes" :key="episode.onChainPda" class="episode-item">
+          <!-- More chapters (showing just 4 for brevity) -->
+          <div class="bg-gray-900/30 backdrop-blur-sm rounded-lg p-3 flex items-center">
+            <img 
+              v-if="episode.thumbnailCid" :src="`https://gateway.pinata.cloud/ipfs/${episode.thumbnailCid}`"
+              alt="Chapter thumbnail" 
+              class="w-16 h-16 rounded-md object-cover mr-4"
+            />
+            <div class="flex-grow">
+              <div class="flex items-center gap-2 mb-1">
+                <span class="bg-pink-500 text-white text-xs px-2 py-0.5 rounded-full">Chapter {{episode.order !== undefined ? episode.order : 'N/A'}}</span>
+                <div class="flex items-center text-gray-400 text-xs">
+                  <span class="i-lucide-calendar text-xs mr-1"></span>
+                  <span>15 April</span>
+                </div>
+              </div>
+              <h3 class="font-medium">{{ episode.name }}</h3>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-sm text-gray-300">{{ episode.likeCount }} Like</span>
+              <div class="w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center">
+                <span class="i-lucide-check text-white text-sm"></span>
+              </div>
+            </div>
+          </div>
+        </div>  
+        
+      </div>
+    </div>
+
+    <!-- NFTs Collection -->
+    <div>
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-bold">NFTs Collection</h2>
+      </div>
+      
+      <div class="mb-2">
+        <div class="flex items-center gap-2">
+          <span class="text-sm">Total</span>
+          <div class="flex items-center gap-1">
+            <span class="i-lucide-image text-green-500"></span>
+            <span class="text-sm">3 NFTs</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="bg-gray-900/30 backdrop-blur-sm rounded-xl p-4">
+        <div class="bg-teal-400 rounded-lg p-4 mb-4">
+          <img 
+            src="" 
+            alt="NFT" 
+            class="w-full aspect-square object-cover rounded-md mb-2"
+          />
+          <h3 class="text-center font-medium text-gray-800">The Heroic With Timun</h3>
+        </div>
+        
+        <button class="w-full bg-purple-600 hover:bg-purple-500 text-white py-3 rounded-lg font-medium transition mb-4">
+          Mint Now
+        </button>
+        
+        <div class="flex items-center justify-between">
+          <button class="text-gray-400 hover:text-white">
+            <span class="i-lucide-chevron-left text-xl"></span>
+          </button>
+          <span class="text-sm">1/3 NFTs</span>
+          <button class="text-gray-400 hover:text-white">
+            <span class="i-lucide-chevron-right text-xl"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup>
@@ -241,6 +326,8 @@ const SOLANA_RPC_URL = import.meta.env.VITE_RPC_ENDPOINT || 'https://api.devnet.
 import idlFromFile from '../anchor/tale_story.json';
 const PROGRAM_ID = new PublicKey(idlFromFile.address);
 const idl = idlFromFile;
+import idlFromFileNft from '../anchor/tale_nft' // Adjust path as necessary
+const READIUM_FUN_PROGRAM_ID_NFT = new PublicKey(idlFromFileNft.address); // Your Program ID from IDL
 const MAX_ONCHAIN_EPISODE_ID_SEED_LENGTH = 32;
 
 // --- Wallet and Program ---
@@ -248,7 +335,7 @@ const wallet = useWallet();
 const connection = new Connection(SOLANA_RPC_URL, "confirmed");
 let provider;
 let program;
-
+let programNft;
 // --- Component State ---
 const fetchedOnChainEpisodes = ref([]);
 const backendImageLinks = ref(new Map());
@@ -348,6 +435,7 @@ watch([() => wallet.connected.value, () => props.parentTale?.onChainPdaString, (
             provider = new AnchorProvider(connection, wallet.wallet.value.adapter, AnchorProvider.defaultOptions());
             try {
                 program = new Program(idl, provider);
+                programNft = new Program(idlFromFileNft,provider)
                 console.log("EpisodeManager: Anchor Program Initialized.");
                 programJustInitialized = true;
             } catch (e) { console.error("EpisodeManager: Error initializing Program:", e); program = null; provider = null; return; }
@@ -361,7 +449,7 @@ watch([() => wallet.connected.value, () => props.parentTale?.onChainPdaString, (
         // Assuming fetchUserOnChainMintActivities uses the tale_nft program
         // This part might need adjustment if it's for a different program
         // For now, keeping it as is, but ensure programNft is initialized if needed for this.
-        // await fetchUserOnChainMintActivities(); 
+        await fetchUserOnChainMintActivities(); 
     }
 
   } else {
@@ -373,6 +461,27 @@ watch([() => wallet.connected.value, () => props.parentTale?.onChainPdaString, (
     }
   }
 }, { immediate: true, deep: true });
+
+async function fetchUserOnChainMintActivities() {
+    if (!program || !props.appUser?.walletAddress) {
+        userOnChainMintActivities.value = [];
+        return;
+    }
+    isLoadingUserMintActivities.value = true;
+    try {
+        const userPk = new PublicKey(props.appUser.walletAddress);
+        const activities = await programNft.account.mintActivity.all([
+            { memcmp: { offset: 8, bytes: userPk.toBase58() } }
+        ]);
+        console.log(activities)
+        userOnChainMintActivities.value = activities;
+    } catch (error) {
+        console.error("Error fetching user's on-chain mint activities:", error);
+        userOnChainMintActivities.value = [];
+    } finally {
+        isLoadingUserMintActivities.value = false;
+    }
+}
 
 // --- Utility Functions ---
 function showUiMessage(msg, type = 'info', txSig = null, duration = 5000) {
@@ -814,7 +923,7 @@ watch(() => props.parentTale?.onChainPdaString, (newParentPda) => {
 
 watch(() => props.appUser?.walletAddress, (newUserWalletAddr, oldUserWalletAddr) => {
     if (newUserWalletAddr && newUserWalletAddr !== oldUserWalletAddr && program) {
-        // fetchUserOnChainMintActivities(); // If needed for content locking
+        fetchUserOnChainMintActivities(); // If needed for content locking
     } else if (!newUserWalletAddr) {
         userOnChainMintActivities.value = [];
     }
