@@ -1,6 +1,162 @@
 <template>
-  <div class="auth-container">
-    <h1 class="auth-title">User Authentication</h1>
+  <div>
+    <main class="max-w-4xl mx-auto px-4 py-12 flex flex-col items-center">
+      <!-- Logout Button (top right) -->
+      
+      <!-- Profile Avatar -->
+      <div class="relative mb-4">
+        <div class="w-32 h-32 rounded-full overflow-hidden border-4 border-purple-400 shadow-lg">
+          <img 
+            :src="avatarUrl"
+            alt="Profile Avatar" 
+            class="w-full h-full object-cover"
+          />
+        </div>
+        <div v-if="isAuthenticated" class="flex justify-center mt-2">
+          <button @click="showAvatarModal = true" class="text-xs text-indigo-400 hover:underline focus:outline-none">Update Image</button>
+        </div>
+        <div v-if="isAuthenticated" class="w-full flex justify-center mb-4 mt-4">
+          <button @click="handleLogout" class="btn btn-danger logout-btn">Logout</button>
+        </div>
+      </div>
+
+
+      <!-- Username -->
+      
+      <!-- Wallet Address -->
+      <div v-if="isAuthenticated" class="bg-purple-600 rounded-full px-4 py-1 text-sm">
+        {{ shortenAddress(wallet.publicKey.value.toBase58()) }}
+      </div>
+      <div v-if="isAuthenticated" class="bg-purple-800/50 backdrop-blur-sm rounded-full p-1 flex mt-10 mb-10">
+        <button
+          @click="setActiveTab('series')"
+          :class="[
+            'px-6 py-2 rounded-full font-medium transition',
+            activeTabs === 'series' ? 'bg-white text-purple-900' : 'text-gray-300 hover:text-white'
+          ]"
+        >
+          Published Series
+        </button>
+        <button
+          @click="setActiveTab('nft')"
+          :class="[
+            'px-6 py-2 rounded-full font-medium transition',
+            activeTabs === 'nft' ? 'bg-white text-purple-900' : 'text-gray-300 hover:text-white'
+          ]"
+        >
+          Published NFT
+        </button>
+        <button
+          @click="setActiveTab('minted')"
+          :class="[
+            'px-6 py-2 rounded-full font-medium transition',
+            activeTabs === 'minted' ? 'bg-white text-purple-900' : 'text-gray-300 hover:text-white'
+          ]"
+        >
+          NFTs Minted
+        </button>
+      </div>
+      
+      <!-- Wallet Connection Card -->
+      <div v-if="!wallet.connected.value" class="w-full bg-purple-950/50 backdrop-blur-sm rounded-xl p-10 flex flex-col items-center">
+        <h2 class="text-2xl font-semibold mb-3">Wallet Not Connected</h2>
+        <p class="text-gray-300 text-center max-w-md mb-8">
+          To explore the full power of Tale.Fun, 
+          you need to connect your wallet.
+        </p>
+        <WalletMultiButton/>
+      </div>
+      <div v-if="wallet.connected.value && !isAuthenticated && !showRegistrationForm && !pendingSignatureVerification" class="w-full bg-purple-950/50 backdrop-blur-sm rounded-xl p-10 flex flex-col items-center">
+        <h2 class="text-2xl font-semibold mb-3">Verify Ownership</h2>
+        <button @click="handleSignMessageAndVerify" :disabled="isLoadingAuth" class="btn btn-primary action-button">
+          {{ isLoadingAuth ? 'Verifying...' : 'Sign With Wallet' }}
+        </button>
+        <p class="form-text info-text">You'll be asked to sign a message to verify wallet ownership.</p>
+      </div>
+      <!-- Published Series Tab -->
+      <div v-if="isAuthenticated && activeTabs === 'series'">
+        <h2 class="text-2xl font-bold mb-6 text-white">Your Published Series</h2>
+        <div v-if="isLoadingTales" class="text-center py-8 text-slate-400">Loading your stories...</div>
+        <div v-else-if="userTales.length === 0" class="text-center py-8 text-slate-400">You haven't published any series yet.</div>
+        <div v-else class="mt-8">
+          <div class="grid grid-cols-12 gap-4">
+            <div v-for="tale in userTales" :key="tale.publicKey.toString()" class="col-span-12 md:col-span-8 lg:col-span-4">
+              <div class="rounded-lg p-4 bg-gradient-to-b from-[#372754] to-[#2a1d40]">
+                <div class="bg-[#43B4CA] rounded-lg p-6 relative">
+                  <img src="/public/icons/grid.svg" alt="" class="absolute top-[4%] right-[8%] w-[85%] z-0">
+                  <img :src="tale.account.thumbnailCid ? `https://gateway.pinata.cloud/ipfs/${tale.account.thumbnailCid}` : '/public/images/comic_1.png'" alt="Featured Content"
+                    class="w-full mx-auto rounded-lg object-cover z-10 relative">
+                  <div class="flex justify-between mt-5 relative z-10">
+                    <div class="text-white text-xs p-2 bg-[rgba(0,0,0,0.4)] rounded-full border">{{ tale.chapterCount }} Chapters</div>
+                    <div class="relative">
+                      <div
+                        class="absolute right-0 top-0 font-bold min-w-[80px] text-xs text-black rounded-full bg-[#DBB106] px-2 py-2 border-white border">
+                        {{ formatLikeCount(tale.likeCount) }} Likes
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <p class="text-medium text-lg mt-4">{{ tale.account.title }}</p>
+                <div class="flex w-fit text-sm justify-start mt-4 p-1 px-3 items-center gap-4 bg-slate-800 rounded-full">
+                  <img src="/public/icons/nft.svg" alt="" class="w-[20px] h-[20px]">
+                  <p>{{ tale.nftCount }} NFTs Collection</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Published NFT Tab -->
+      <div v-if="isAuthenticated && activeTabs === 'nft'">
+        <h2 class="text-2xl font-bold mb-6 text-white">Your Published NFTs</h2>
+        <div v-if="isLoadingNfts" class="text-center py-8 text-slate-400">Loading your NFTs...</div>
+        <div v-else-if="userNfts.length === 0" class="text-center py-8 text-slate-400">You haven't published any NFTs yet.</div>
+        <div v-else class="mt-8">
+          <div class="grid grid-cols-12 gap-[24px]">
+            <div v-for="(nft, i) in userNfts" :key="i" class="col-span-12 md:col-span-6 lg:col-span-4 rounded-lg mt-4" style="background-color: rgba(0, 0, 0, 0.5);">
+              <img :src="nft.image" alt="NFT Image" style="width:100%;height:auto;object-fit:cover;">
+              <div class="relative p-5">
+                <div class="mt-5">
+                  <h1 class="text-lg">{{ nft.name }}</h1>
+                  <div class="flex gap-4 py-4 justify-between items-center">
+                    <div class="flex gap-2 items-center">
+                      <img src="/public/icons/solana.svg" alt="solana">
+                      <p class="text-slate-400">{{ nft.price ? nft.price.toLocaleString(undefined, { maximumFractionDigits: 3 }) : '-' }} SOL</p>
+                    </div>
+                    <div class="flex gap-2 items-center">
+                      <i class="pi pi-user"></i>
+                      <p class="text-slate-400">{{ nft.itemsRemaining || 0 }}/{{ nft.itemsAvailable || 0 }} Supply</p>
+                    </div>
+                  </div>
+                  <Button class="w-full mt-4" severity="secondary">See Detail</Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+    <!-- <div>
+      <div v-if="!wallet.connected.value" >
+        <p class="text-center">Wallet Not Connected</p>
+        <p class="text-center">To explore the full power of Tale.Fun, 
+          you need to connect your wallet. </p>
+        <div class="flex justify-center">
+          <WalletMultiButton/>
+        </div>
+      </div>
+      <div v-if="wallet.connected.value && !isAuthenticated && !showRegistrationForm && !pendingSignatureVerification" >
+        <h2>Verify Ownership</h2>
+        <button @click="handleSignMessageAndVerify" :disabled="isLoadingAuth" class="btn btn-primary action-button">
+          {{ isLoadingAuth ? 'Verifying...' : 'Sign With Wallet' }}
+        </button>
+        <p class="form-text info-text">You'll be asked to sign a message to verify wallet ownership.</p>
+      </div>
+      <div v-if="isAuthenticated" >
+       
+      </div>
+    </div> -->
+    <!-- <h1 class="auth-title">User Authentication</h1>
 
     <div class="auth-section wallet-section">
       <h2 class="section-title">1. Wallet Connection</h2>
@@ -21,9 +177,9 @@
         {{ isLoadingAuth ? 'Verifying...' : 'Login / Register with Wallet' }}
       </button>
       <p class="form-text info-text">You'll be asked to sign a message to verify wallet ownership.</p>
-    </div>
+    </div> -->
 
-    <div v-if="showRegistrationForm" class="auth-section registration-section">
+    <!-- <div v-if="showRegistrationForm" class="auth-section registration-section">
       <h2 class="section-title">3. Complete Your Profile</h2>
       <p class="registration-prompt">Welcome! Your wallet is verified. Please provide a display name to finish setting up your account.</p>
       <form @submit.prevent="handleCompleteRegistrationWithSignature" class="auth-form">
@@ -31,14 +187,6 @@
           <label for="nameInput" class="form-label">Your Name:</label>
           <input type="text" id="nameInput" v-model="name" class="form-input-auth" placeholder="Enter your display name" required>
         </div>
-        <!-- <div>
-          <label for="typeInput" class="form-label">User Type (optional):</label>
-          <select id="typeInput" v-model="userType" class="form-input-auth">
-            <option value="user">User</option>
-            <option value="creator">Creator</option>
-            <option value="customer">Customer</option>
-          </select>
-        </div> -->
         <button type="submit" :disabled="isLoadingAuth" class="btn btn-success form-submit-button">
           {{ isLoadingAuth ? 'Completing Registration...' : 'Complete Registration' }}
         </button>
@@ -72,6 +220,16 @@
          :class="['ui-message-box', uiMessage.type === 'error' ? 'error-box' : (uiMessage.type === 'success' ? 'success-box' : 'info-box')]"
          >
       {{ uiMessage.text }}
+    </div> -->
+    <!-- Avatar Upload Modal -->
+    <div v-if="showAvatarModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60">
+      <div class="bg-white dark:bg-gray-900 rounded-lg p-6 relative w-[350px] max-w-full">
+        <button @click="showAvatarModal = false" class="absolute top-2 right-2 text-gray-400 hover:text-gray-700 dark:hover:text-white text-xl">&times;</button>
+        <h3 class="text-lg font-semibold mb-4 text-center">Update Profile Image</h3>
+        <AvatarUploader :key="avatarUrl" @file-selected="handleAvatarSelected" />
+        <div v-if="avatarUploading" class="text-indigo-500 text-center mt-2">Uploading...</div>
+        <div v-if="avatarUploadError" class="text-red-500 text-center mt-2">{{ avatarUploadError }}</div>
+      </div>
     </div>
   </div>
 </template>
@@ -83,6 +241,14 @@ import { useWallet, WalletMultiButton } from 'solana-wallets-vue';
 import axios from 'axios';
 import { Buffer } from 'buffer'; // Needed for TextEncoder if running in environment where it's not global
 import AvatarUploader from './AvatarUploader.vue';
+import { Connection, PublicKey } from '@solana/web3.js';
+import { Program, AnchorProvider } from '@coral-xyz/anchor';
+import taleStoryIdl from '../anchor/tale_story.json';
+import taleNftIdl from '../anchor/tale_nft.json';
+import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
+import { mplCandyMachine, fetchCandyMachine } from '@metaplex-foundation/mpl-candy-machine';
+import { publicKey as umiPublicKey } from '@metaplex-foundation/umi';
+import Button from 'primevue/button';
 
 const router = useRouter();
 const route = useRoute();
@@ -104,6 +270,8 @@ const signedAuthData = ref({ message: '', signature: null, walletAddress: '' });
 
 const isAuthenticated = computed(() => !!token.value && !!currentUser.value);
 
+const activeTabs = ref('series')
+
 // Form Inputs for registration
 const name = ref('');
 const userType = ref('creator');
@@ -116,7 +284,29 @@ const avatarUploading = ref(false);
 const avatarUploadError = ref('');
 
 // Helper to get avatar URL (IPFS gateway or fallback)
-const avatarUrl = computed(() => currentUser.value?.avatar || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(currentUser.value?.name || 'User'));
+const avatarUrl = computed(() => {
+  if (currentUser.value && currentUser.value.avatar) {
+    return currentUser.value.avatar;
+  }
+  // fallback: try to fetch from backend by wallet address if not in currentUser
+  if (wallet.connected.value && wallet.publicKey.value) {
+    // Use a backend endpoint to fetch user by wallet address
+    // This is a simple fetch, you may want to cache or debounce in production
+    const walletAddr = wallet.publicKey.value.toBase58();
+    // If currentUser is not set, try to fetch
+    if (!currentUser.value) {
+      fetch(`${AUTH_API_BASE_URL.replace(/\/api$/, '')}/api/users/wallet/${walletAddr}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.success && data.data && data.data.avatar) {
+            currentUser.value = { ...data.data };
+          }
+        });
+    }
+  }
+  // fallback to generated avatar
+  return 'https://ui-avatars.com/api/?name=' + encodeURIComponent(currentUser.value?.name || 'User');
+});
 
 function showUiMessage(msg, type = 'info', duration = 4000) {
   uiMessage.value = { text: msg, type };
@@ -124,7 +314,9 @@ function showUiMessage(msg, type = 'info', duration = 4000) {
     setTimeout(() => { uiMessage.value = { text: '', type: 'info' }; }, duration);
   }
 }
-
+const setActiveTab = (tabName) => {
+  activeTabs.value = tabName;
+};
 const shortenAddress = (address, chars = 6) => {
   if (!address) return '';
   return `${address.slice(0, chars)}...${address.slice(-chars)}`;
@@ -366,6 +558,147 @@ async function handleAvatarSelected(file) {
     avatarUploading.value = false;
   }
 }
+
+const SOLANA_RPC_URL = import.meta.env.VITE_RPC_ENDPOINT || 'https://api.devnet.solana.com';
+const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
+const isLoadingTales = ref(false);
+const allTales = ref([]);
+const allEpisodes = ref([]);
+
+const userTales = computed(() => {
+  if (!wallet.connected.value || !wallet.publicKey.value) return [];
+  const userAddress = wallet.publicKey.value.toBase58();
+  // Filter tales by author
+  return allTales.value
+    .filter(tale => tale.account.author.toBase58() === userAddress)
+    .map(tale => {
+      // Count chapters (episodes with parentTale == tale.publicKey)
+      const chapterCount = allEpisodes.value.filter(e => e.account.parentTale.toBase58() === tale.publicKey.toBase58()).length;
+      // Count NFTs (episodes with parentTale == tale.publicKey && isNft)
+      const nftCount = allEpisodes.value.filter(e => e.account.parentTale.toBase58() === tale.publicKey.toBase58() && e.account.isNft).length;
+      // Like count from on-chain
+      const likeCount = tale.account.likeCount || 0;
+      return {
+        ...tale,
+        chapterCount,
+        nftCount,
+        likeCount
+      };
+    });
+});
+
+function formatLikeCount(count) {
+  if (count >= 1000) return (count / 1000).toFixed(1) + 'K';
+  return count;
+}
+
+async function fetchUserTalesAndEpisodes() {
+  if (!wallet.connected.value || !wallet.publicKey.value) return;
+  isLoadingTales.value = true;
+  try {
+    const provider = new AnchorProvider(connection, wallet.wallet.value.adapter, AnchorProvider.defaultOptions());
+    const program = new Program(taleStoryIdl, provider);
+    const tales = await program.account.tale.all();
+    const episodes = await program.account.episode.all();
+    allTales.value = tales;
+    allEpisodes.value = episodes;
+  } catch (e) {
+    allTales.value = [];
+    allEpisodes.value = [];
+  } finally {
+    isLoadingTales.value = false;
+  }
+}
+
+watch(() => wallet.connected.value, (isConnected) => {
+  if (isConnected) fetchUserTalesAndEpisodes();
+});
+
+onMounted(() => {
+  if (wallet.connected.value) fetchUserTalesAndEpisodes();
+});
+
+const isLoadingNfts = ref(false);
+const userNfts = ref([]);
+
+async function fetchUserNfts() {
+  if (!wallet.connected.value || !wallet.publicKey.value) return;
+  isLoadingNfts.value = true;
+  try {
+    const provider = new AnchorProvider(connection, wallet.wallet.value.adapter, AnchorProvider.defaultOptions());
+    const program = new Program(taleNftIdl, provider);
+    const allListed = await program.account.listedNft.all();
+    const userAddress = wallet.publicKey.value.toBase58();
+    const umi = createUmi(SOLANA_RPC_URL).use(mplCandyMachine());
+    const filtered = allListed.filter(item => item.account.creatorWallet.toBase58() === userAddress);
+    userNfts.value = await Promise.all(
+      filtered.map(async (item) => {
+        let cmData = null;
+        let name = '';
+        let image = 'https://placehold.co/326x327';
+        let price = null;
+        let itemsAvailable = null;
+        let itemsMinted = null;
+        let itemsRemaining = null;
+        let metadata = null;
+        try {
+          cmData = await fetchCandyMachine(umi, umiPublicKey(item.account.candyMachineAddress.toString()));
+          if (cmData.items && cmData.items.length > 0 && cmData.items[0].name) {
+            name = cmData.items[0].name;
+          } else if (cmData.data.name) {
+            name = cmData.data.name;
+          }
+          if (cmData.header.lamports.basisPoints) {
+              price = Number(cmData.header.lamports.basisPoints) / 1_000_000_000;
+          } else if (cmData.configLineSettings && cmData.configLineSettings.prefixName){ //legacy
+              name = cmData.configLineSettings.prefixName;
+          }
+          itemsAvailable = Number(cmData.data.itemsAvailable);
+          itemsMinted = Number(cmData.itemsRedeemed);
+          itemsRemaining = itemsAvailable - itemsMinted;
+          if (cmData.items && cmData.items.length > 0 && cmData.items[0].uri) {
+            try {
+              const response = await fetch(cmData.items[0].uri);
+              if (response.ok) {
+                metadata = await response.json();
+                if (metadata.image) {
+                  image = metadata.image;
+                }
+              }
+            } catch (err) {}
+          }
+        } catch (err) {}
+        return {
+          name: name || 'Untitled NFT Collection',
+          image,
+          price,
+          itemsAvailable,
+          itemsMinted,
+          itemsRemaining,
+        };
+      })
+    );
+  } catch (e) {
+    userNfts.value = [];
+  } finally {
+    isLoadingNfts.value = false;
+  }
+}
+
+watch(() => wallet.connected.value, (isConnected) => {
+  if (isConnected) fetchUserNfts();
+});
+
+onMounted(() => {
+  if (wallet.connected.value) fetchUserNfts();
+});
+
+function handleLogout() {
+  performLogout();
+  if (wallet.disconnect) wallet.disconnect();
+}
+
+const showAvatarModal = ref(false);
 
 </script>
 
@@ -673,6 +1006,19 @@ async function handleAvatarSelected(file) {
   color: #b91c1c;
   font-size: 0.95rem;
   margin-top: 0.25rem;
+}
+
+.logout-btn {
+  min-width: 100px;
+  margin-bottom: 0;
+}
+
+/* Modal styles for avatar upload */
+.fixed.inset-0 {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
 }
 
 </style>

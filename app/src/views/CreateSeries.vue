@@ -166,7 +166,7 @@
 
 <script setup>
 import Stepper from 'primevue/stepper';
-import StepList from 'primevue/stepList';
+// import StepList from 'primevue/stepList';
 import Step from 'primevue/step';
 import StepPanels from 'primevue/stepPanels';
 import StepPanel from 'primevue/stepPanel';

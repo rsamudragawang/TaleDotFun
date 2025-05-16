@@ -268,7 +268,7 @@ authApiClient.interceptors.response.use(
     const msg = error.response?.data?.message || error.message || 'An API error occurred.';
     showUiMessage(msg, 'error');
     if (error.response?.status === 401 && error.response?.data?.message?.includes("token failed")) {
-        localStorage.removeItem(JWT_TOKEN_KEY);
+        // localStorage.removeItem(JWT_TOKEN_KEY);
         appUser.value = null;
     }
     return Promise.reject(error.response?.data || { message: msg, error });
@@ -283,7 +283,7 @@ async function fetchAppUser() {
   try {
     const response = await authApiClient.get('/auth/me');
     appUser.value = response.success ? response.data : null;
-    if (!response.success) localStorage.removeItem(JWT_TOKEN_KEY);
+    // if (!response.success) localStorage.removeItem(JWT_TOKEN_KEY);
   } catch (error) {
     console.error("TaleManager: Failed to fetch app user:", error);
     appUser.value = null;
