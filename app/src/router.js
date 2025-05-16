@@ -70,6 +70,11 @@ const routes = [
     component: TaleManager,
   },
   {
+    path: '/cm', // Main page to manage and view own/all tales
+    name: 'CM',
+    component: CandyMachineCreator,
+  },
+  {
     path: '/tales/:id', // Detail page for a single tale, where EpisodeManager would be used
     name: 'TaleDetail',
     component: TaleDetailView, // Create this view to show tale details and embed EpisodeManager
