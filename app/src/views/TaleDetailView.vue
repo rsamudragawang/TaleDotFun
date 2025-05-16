@@ -78,7 +78,7 @@ const JWT_TOKEN_KEY = 'readium_fun_jwt_token';
 const SOLANA_RPC_URL = import.meta.env.VITE_RPC_ENDPOINT || 'https://api.devnet.solana.com';
 
 import idlFromFile from '../anchor/tale_story' // Adjust path as necessary
-const PROGRAM_ID = new PublicKey("HoSn8RTHXrJmTgw5Wc6XMQDDVdvhuj2VUg6HVtVtPjXe");
+const PROGRAM_ID = new PublicKey(idlFromFile.address);
 const idl = idlFromFile;
 const PROGRAM_ID_NFT = new PublicKey("DJgfvt8jXgkXXkRx7CaFa9FJSXbcc1SALnfyCdXHZR1j")
 // --- Wallet and Program ---

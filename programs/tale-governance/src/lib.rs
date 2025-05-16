@@ -1,8 +1,8 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{Token, TokenAccount};
+use anchor_spl::token::{Token};
 
 // Ensure this matches the program ID you are deploying to and testing against
-declare_id!("HTEJ6qZURvoHMwDCkDHNnfYYhcfCVkmzNTBDjKQHb1mF");
+declare_id!("4ezUiWjyURnQrsZKifJexyBEG3qUh8XyvevtVK3erN2i");
 
 #[program]
 pub mod tale_governance {
@@ -16,11 +16,12 @@ pub mod tale_governance {
         choices: Vec<String>,
         start_time: i64,
         end_time: i64,
-        nft_mint: Option<Pubkey>,
         regular_vote_power: u64,
         nft_vote_power: u64,
         category: VoteCategory,
         tags: Vec<String>,
+        stories: Vec<Pubkey>,
+        nfts: Vec<String>,
     ) -> Result<()> {
         require!(start_time < end_time, GovernanceError::InvalidTimeRange);
         require!(choices.len() >= 2, GovernanceError::InvalidChoices);
@@ -37,7 +38,6 @@ pub mod tale_governance {
         vote.choices = choices;
         vote.start_time = start_time;
         vote.end_time = end_time;
-        vote.nft_mint = nft_mint;
         vote.regular_vote_power = regular_vote_power;
         vote.nft_vote_power = nft_vote_power;
         vote.total_votes = vec![0; vote.choices.len()];
@@ -51,6 +51,9 @@ pub mod tale_governance {
         vote.status = VoteStatus::Upcoming;
         vote.winning_choice = None;
         vote.total_vote_power = 0;
+        vote.stories = stories;
+        vote.nfts = nfts;
+        vote.history = vec![];
 
         let vote_record = &mut ctx.accounts.vote_record;
         vote_record.vote = vote.key();
@@ -63,7 +66,7 @@ pub mod tale_governance {
         Ok(())
     }
 
-    pub fn cast_vote(ctx: Context<CastVote>, choice_index: u8) -> Result<()> {
+    pub fn cast_vote(ctx: Context<CastVote>, choice_index: u8, is_nft_holder: bool) -> Result<()> {
         let vote = &mut ctx.accounts.vote;
         let vote_record = &mut ctx.accounts.vote_record;
         let clock = Clock::get()?;
@@ -74,21 +77,13 @@ pub mod tale_governance {
         require!(choice_index < vote.choices.len() as u8, GovernanceError::InvalidChoice);
         require!(!vote_record.has_voted, GovernanceError::AlreadyVoted);
 
-        let vote_power = if let Some(nft_mint) = vote.nft_mint {
-            let nft_token_account = TokenAccount::try_deserialize(&mut &ctx.accounts.nft_token_account.data.borrow()[..])?;
-            require!(nft_token_account.mint == nft_mint, GovernanceError::InvalidNFT);
-            require!(nft_token_account.owner == ctx.accounts.voter.key(), GovernanceError::NotNFTOwner);
-            if nft_token_account.amount > 0 {
-                vote.nft_voters += 1;
-                vote.nft_vote_power
-            } else {
-                vote.regular_voters += 1;
-                vote.regular_vote_power
-            }
+        // Use NFT or regular vote power based on is_nft_holder
+        let vote_power = if is_nft_holder { vote.nft_vote_power } else { vote.regular_vote_power };
+        if is_nft_holder {
+            vote.nft_voters += 1;
         } else {
             vote.regular_voters += 1;
-            vote.regular_vote_power
-        };
+        }
 
         vote.total_votes[choice_index as usize] += vote_power;
         vote.total_participants += 1;
@@ -101,6 +96,13 @@ pub mod tale_governance {
         if clock.unix_timestamp >= vote.start_time && vote.status == VoteStatus::Upcoming {
             vote.status = VoteStatus::Active;
         }
+
+        vote.history.push(VoteHistory {
+            voter: ctx.accounts.voter.key(),
+            timestamp: clock.unix_timestamp,
+            voting_power: vote_record.vote_power,
+            transaction: ctx.accounts.vote_record.key().to_string(),
+        });
 
         Ok(())
     }
@@ -218,6 +220,14 @@ pub struct ListVotes<'info> {
     pub vote_list: Account<'info, VoteList>,
 }
 
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+pub struct VoteHistory {
+    pub voter: Pubkey,
+    pub timestamp: i64,
+    pub voting_power: u64,
+    pub transaction: String,
+}
+
 #[account]
 pub struct Vote {
     pub creator: Pubkey,
@@ -227,7 +237,6 @@ pub struct Vote {
     pub choices: Vec<String>,
     pub start_time: i64,
     pub end_time: i64,
-    pub nft_mint: Option<Pubkey>,
     pub regular_vote_power: u64,
     pub nft_vote_power: u64,
     pub total_votes: Vec<u64>,
@@ -241,6 +250,9 @@ pub struct Vote {
     pub status: VoteStatus,
     pub winning_choice: Option<u8>,
     pub total_vote_power: u64,
+    pub stories: Vec<Pubkey>,
+    pub nfts: Vec<String>,
+    pub history: Vec<VoteHistory>,
 }
 
 #[account]
@@ -287,7 +299,6 @@ impl Vote {
         4 + (50 * 10) + // choices (max 10 choices, 50 chars each)
         8 + // start_time
         8 + // end_time
-        1 + 32 + // nft_mint (Option<Pubkey>)
         8 + // regular_vote_power
         8 + // nft_vote_power
         4 + (8 * 10) + // total_votes (max 10 choices)
@@ -300,7 +311,12 @@ impl Vote {
         4 + (20 * 5) + // tags (max 5 tags, 20 chars each)
         1 + // status
         1 + 1 + // winning_choice (Option<u8>)
-        8; // total_vote_power
+        8 + // total_vote_power
+        4 + (32 * 10) + // stories (max 10)
+        4 + (64 * 10) + // nfts (max 10, 64 chars each)
+        4 + ( // history (max 50 entries)
+            (32 + 8 + 8 + 88) * 50 // voter pubkey + timestamp + voting_power + transaction string (max 80 chars + 8 for string overhead)
+        );
 }
 
 impl VoteRecord {

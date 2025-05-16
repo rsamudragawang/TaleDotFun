@@ -1,12 +1,130 @@
 {
-  "address": "FuHt8d5LN4fr2KrT9N4cb4WSsLBsm5aXgHUkEEGzxSU9",
+  "address": "EynuKneQ6RX5AAUY8E6Lq6WvNrUVY2F3C8TcFNB7MYh8",
   "metadata": {
-    "name": "tale_story",
+    "name": "readium_fun",
     "version": "0.1.0",
     "spec": "0.1.0",
     "description": "Created with Anchor"
   },
   "instructions": [
+    {
+      "name": "cancel_mint_activity",
+      "discriminator": [
+        87,
+        117,
+        99,
+        43,
+        133,
+        74,
+        129,
+        52
+      ],
+      "accounts": [
+        {
+          "name": "mint_activity_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  97,
+                  99,
+                  116,
+                  105,
+                  118,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user_wallet"
+              },
+              {
+                "kind": "account",
+                "path": "mint_activity_account.nft_mint_address",
+                "account": "MintActivity"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user_wallet",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "mint_activity_account"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "close_mint_activity_account",
+      "discriminator": [
+        132,
+        206,
+        53,
+        129,
+        50,
+        119,
+        2,
+        144
+      ],
+      "accounts": [
+        {
+          "name": "mint_activity_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  97,
+                  99,
+                  116,
+                  105,
+                  118,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user_wallet"
+              },
+              {
+                "kind": "account",
+                "path": "mint_activity_account.nft_mint_address",
+                "account": "MintActivity"
+              }
+            ]
+          }
+        },
+        {
+          "name": "user_wallet",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "mint_activity_account"
+          ]
+        }
+      ],
+      "args": []
+    },
     {
       "name": "create_episode",
       "discriminator": [
@@ -75,10 +193,6 @@
           "type": "string"
         },
         {
-          "name": "thumbnail_cid",
-          "type": "string"
-        },
-        {
           "name": "image_set_id",
           "type": "string"
         },
@@ -97,18 +211,6 @@
         {
           "name": "candy_machine_id",
           "type": "string"
-        },
-        {
-          "name": "publish_at_time_option",
-          "type": {
-            "option": "i64"
-          }
-        },
-        {
-          "name": "unpublish_at_time_option",
-          "type": {
-            "option": "i64"
-          }
         }
       ]
     },
@@ -178,30 +280,8 @@
           "type": "string"
         },
         {
-          "name": "thumbnail_cid",
-          "type": "string"
-        },
-        {
           "name": "initial_status",
           "type": "u8"
-        },
-        {
-          "name": "candy_machine_address_option",
-          "type": {
-            "option": "pubkey"
-          }
-        },
-        {
-          "name": "is_governance",
-          "type": "bool"
-        },
-        {
-          "name": "is_early_access",
-          "type": "bool"
-        },
-        {
-          "name": "is_real_world",
-          "type": "bool"
         }
       ]
     },
@@ -306,54 +386,81 @@
       "args": []
     },
     {
-      "name": "like_episode",
+      "name": "log_mint_activity",
       "discriminator": [
-        134,
-        72,
-        181,
-        151,
-        76,
-        15,
-        238,
-        251
+        191,
+        132,
+        131,
+        41,
+        166,
+        56,
+        67,
+        11
       ],
       "accounts": [
         {
-          "name": "episode_account",
-          "writable": true
+          "name": "mint_activity_account",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  97,
+                  99,
+                  116,
+                  105,
+                  118,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "user_wallet"
+              },
+              {
+                "kind": "account",
+                "path": "nft_mint_address"
+              }
+            ]
+          }
         },
         {
-          "name": "user",
-          "writable": true,
-          "signer": true
-        }
-      ],
-      "args": []
-    },
-    {
-      "name": "like_tale",
-      "discriminator": [
-        69,
-        180,
-        62,
-        209,
-        22,
-        103,
-        161,
-        94
-      ],
-      "accounts": [
-        {
-          "name": "tale_account",
-          "writable": true
+          "name": "nft_mint_address"
         },
         {
-          "name": "user",
+          "name": "user_wallet",
           "writable": true,
           "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
-      "args": []
+      "args": [
+        {
+          "name": "candy_machine_id_arg",
+          "type": "pubkey"
+        },
+        {
+          "name": "transaction_signature_str",
+          "type": "string"
+        },
+        {
+          "name": "episode_on_chain_pda_option",
+          "type": {
+            "option": "pubkey"
+          }
+        }
+      ]
     },
     {
       "name": "update_episode",
@@ -417,10 +524,6 @@
           "type": "string"
         },
         {
-          "name": "new_thumbnail_cid",
-          "type": "string"
-        },
-        {
           "name": "new_image_set_id",
           "type": "string"
         },
@@ -439,18 +542,6 @@
         {
           "name": "new_candy_machine_id",
           "type": "string"
-        },
-        {
-          "name": "new_publish_at_time_option",
-          "type": {
-            "option": "i64"
-          }
-        },
-        {
-          "name": "new_unpublish_at_time_option",
-          "type": {
-            "option": "i64"
-          }
         }
       ]
     },
@@ -516,30 +607,8 @@
           "type": "string"
         },
         {
-          "name": "new_thumbnail_cid",
-          "type": "string"
-        },
-        {
           "name": "new_status",
           "type": "u8"
-        },
-        {
-          "name": "new_candy_machine_address_option",
-          "type": {
-            "option": "pubkey"
-          }
-        },
-        {
-          "name": "new_is_governance",
-          "type": "bool"
-        },
-        {
-          "name": "new_is_early_access",
-          "type": "bool"
-        },
-        {
-          "name": "new_is_real_world",
-          "type": "bool"
         }
       ]
     }
@@ -556,6 +625,19 @@
         169,
         208,
         47
+      ]
+    },
+    {
+      "name": "MintActivity",
+      "discriminator": [
+        80,
+        211,
+        14,
+        111,
+        124,
+        247,
+        141,
+        198
       ]
     },
     {
@@ -595,18 +677,18 @@
     },
     {
       "code": 6004,
-      "name": "ThumbnailCidTooLong",
-      "msg": "Thumbnail CID is too long."
-    },
-    {
-      "code": 6005,
       "name": "Unauthorized",
       "msg": "Unauthorized action."
     },
     {
-      "code": 6006,
+      "code": 6005,
       "name": "InvalidStatus",
       "msg": "Invalid status value."
+    },
+    {
+      "code": 6006,
+      "name": "TalePublished",
+      "msg": "Tale is already published and cannot be modified in this way."
     },
     {
       "code": 6007,
@@ -630,23 +712,33 @@
     },
     {
       "code": 6011,
-      "name": "EpisodeThumbnailCidTooLong",
-      "msg": "Episode Thumbnail CID is too long."
-    },
-    {
-      "code": 6012,
       "name": "CandyMachineIdTooLong",
       "msg": "Candy Machine ID is too long."
     },
     {
+      "code": 6012,
+      "name": "EpisodeNftLocked",
+      "msg": "Episode is NFT linked and cannot be modified in this way."
+    },
+    {
       "code": 6013,
-      "name": "InvalidScheduleTimes",
-      "msg": "Invalid schedule times: Publish time must be before unpublish time if both are set."
+      "name": "ParentTaleMismatch",
+      "msg": "Parent tale account does not match."
     },
     {
       "code": 6014,
-      "name": "LikeCountOverflow",
-      "msg": "Like count overflow."
+      "name": "TxSignatureTooLong",
+      "msg": "Transaction signature string is too long."
+    },
+    {
+      "code": 6015,
+      "name": "MintActivityAlreadyCancelled",
+      "msg": "Mint activity already cancelled."
+    },
+    {
+      "code": 6016,
+      "name": "MintActivityNotFound",
+      "msg": "Mint activity not found or already closed."
     }
   ],
   "types": [
@@ -676,10 +768,6 @@
             "type": "string"
           },
           {
-            "name": "thumbnail_cid",
-            "type": "string"
-          },
-          {
             "name": "image_set_id",
             "type": "string"
           },
@@ -706,22 +794,48 @@
           {
             "name": "bump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MintActivity",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user_wallet",
+            "type": "pubkey"
           },
           {
-            "name": "publish_at_time",
+            "name": "candy_machine_id",
+            "type": "pubkey"
+          },
+          {
+            "name": "nft_mint_address",
+            "type": "pubkey"
+          },
+          {
+            "name": "transaction_signature",
+            "type": "string"
+          },
+          {
+            "name": "episode_on_chain_pda",
             "type": {
-              "option": "i64"
+              "option": "pubkey"
             }
           },
           {
-            "name": "unpublish_at_time",
-            "type": {
-              "option": "i64"
-            }
+            "name": "timestamp",
+            "type": "i64"
           },
           {
-            "name": "like_count",
-            "type": "u64"
+            "name": "status",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
           }
         ]
       }
@@ -756,10 +870,6 @@
             "type": "string"
           },
           {
-            "name": "thumbnail_cid",
-            "type": "string"
-          },
-          {
             "name": "status",
             "type": "u8"
           },
@@ -770,28 +880,6 @@
           {
             "name": "bump",
             "type": "u8"
-          },
-          {
-            "name": "candy_machine_address",
-            "type": {
-              "option": "pubkey"
-            }
-          },
-          {
-            "name": "is_governance_token_gated",
-            "type": "bool"
-          },
-          {
-            "name": "is_early_access_token_gated",
-            "type": "bool"
-          },
-          {
-            "name": "is_real_world_asset_gated",
-            "type": "bool"
-          },
-          {
-            "name": "like_count",
-            "type": "u64"
           }
         ]
       }
