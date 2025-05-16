@@ -16,7 +16,7 @@
                     <div></div>
                     <p class="text-white text-2xl font-bold text-center">Make Incredible<br>
                         Stories by Readers Choice</p>
-                    <Button>Create Proposal</Button>
+                    <Button @click="router.push('/create-proposal')">Create Proposal</Button>
                 </div>
             </div>
         </div>

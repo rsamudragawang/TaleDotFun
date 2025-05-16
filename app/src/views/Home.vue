@@ -33,7 +33,7 @@
         Login / Register to Create & Manage Tales
       </router-link>
     </div>
-    <div v-if="appUser" class="welcome-user-section">
+    <div v-if="appUser" class="welcome-user-section mt-4">
       <p>
         Welcome back, <span class="user-name">{{ appUser.name }}</span>!
         <span v-if="appUser.type === 'creator'">
@@ -64,7 +64,7 @@
                   <div class="bg-[#43B4CA] rounded-lg p-8 relative">
                     <img src="/public/icons/grid.svg" alt="" class="absolute top-[4%] right-[8%] w-[85%] z-0">
                     <img :src="tale.account.thumbnailCid ? `https://gateway.pinata.cloud/ipfs/${tale.account.thumbnailCid}` : '/public/images/comic_1.png'" alt="Featured Content"
-                      class="w-full mx-auto rounded-lg object-cover z-10 relative">
+                      class="w-full h-[250px] mx-auto rounded-lg object-cover object-center z-10 relative">
                     <div class="flex justify-between mt-5 relative z-10">
                       <div class="text-white text-xs p-2 bg-[rgba(0,0,0,0.4)] rounded-full border">{{ tale.chapterCount }} Chapters</div>
                       <div class="relative">

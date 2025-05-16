@@ -21,14 +21,15 @@
                 <h1 class="text-white text-2xl">Get Inspired by Others Creator</h1>
             </div>
             <div class="grid grid-cols-12 gap-[24px]">
+                {{ lis }}
                 <div v-for="(nft, i) in listedNfts" :key="i" class="col-span-3 rounded-lg mt-5" style="background-color: rgba(0, 0, 0, 0.5);">
-                    <img :src="nft.image" alt="NFT Image" style="width:100%;height:auto;object-fit:cover;">
+                    <img :src="nft.image" alt="NFT Image" style="height:400px;width:100%;height:auto;object-fit:cover;">
                     <div class="relative p-4">
                         <div class="mt-5">
                             <h1 class="text-lg">{{ nft.name }}</h1>
                             <div class="flex gap-4 py-4 justify-between items-center">
                                 <div class="flex gap-2 items-center">
-                                    <img src="/public/icons/solana.svg" alt="solana">
+                                    <img src="/public/icons/solana.svg" alt="solana" w->
                                     <p class="text-slate-400">{{ nft.price ? nft.price.toLocaleString(undefined, { maximumFractionDigits: 3 }) : '-' }} SOL</p>
                                 </div>
                                 <div class="flex gap-2 items-center">
@@ -316,19 +317,6 @@ onMounted(() => {
     position: relative;
     /* Ensure other content is above the circle */
     z-index: 1;
-}
-
-.circle-bg {
-    position: absolute;
-    top: -200px; /* Adjust as needed */
-    left: 50%;
-    transform: translateX(-50%);
-    width: 800px; /* Adjust as needed */
-    height: 800px; /* Adjust as needed */
-    background-image: radial-gradient(circle, rgba(58, 107, 213, 0.2) 0%, rgba(16, 12, 24, 0) 70%);
-    border-radius: 50%;
-    z-index: 0; /* Behind other content */
-    pointer-events: none; /* Allow clicks to pass through */
 }
 
 /* Ensure content is above the background */

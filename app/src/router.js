@@ -52,6 +52,7 @@ import Governance from './views/Governance.vue';
 import LaunchNFT from './views/LaunchNft.vue';
 import PublishNFT from './views/PublishNft.vue';
 import CreateSeries from './views/CreateSeries.vue';
+import CreateProposal from './views/CreateProposal.vue';
 
 // If you have a specific view for Tale Details that might use EpisodeManager
 const TaleDetailView = () => import('./views/TaleDetailView.vue'); // Example for lazy loading
@@ -137,6 +138,11 @@ const routes = [
     path: '/publish-nft',
     name: 'PublishNFT',
     component: PublishNFT,
+  },
+  {
+    path: '/create-proposal',
+    name: 'CreateProposal',
+    component: CreateProposal,
   }
 ];
 
