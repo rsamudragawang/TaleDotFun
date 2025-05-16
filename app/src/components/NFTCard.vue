@@ -1,42 +1,32 @@
 <template>
-  <div class="bg-white rounded-lg shadow-md overflow-hidden">
-    <div class="relative pb-2/3">
-      <img
-        v-if="nft.metadata.image"
-        :src="nft.metadata.image"
-        :alt="nft.metadata.name"
-        class="absolute h-48 w-full object-cover"
-        @error="handleImageError"
-      />
-      <div v-else class="absolute h-48 w-full bg-gray-200 flex items-center justify-center">
-        <span class="text-gray-500">No Image</span>
-      </div>
-    </div>
-    <div class="p-4">
-      <h3 class="text-lg font-semibold text-gray-900 truncate">{{ nft.name || 'Unnamed NFT' }}</h3>
-      <p class="mt-1 text-sm text-gray-500 line-clamp-2">{{ nft.description || 'No description' }}</p>
-      <div class="mt-4 flex items-center justify-between">
-        <router-link
-          :to="{ name: 'NFTDetail', params: { mint: nft.mint } }"
-          class="text-sm font-medium text-indigo-600 hover:text-indigo-500"
-        >
-          View Details
-        </router-link>
-        <button
-          v-if="showBuyButton"
-          @click="$emit('buy', nft)"
-          class="px-3 py-1 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-        >
-          Buy
-        </button>
-      </div>
+  <div class="tale-card">
+    <img
+      v-if="nft.image"
+      :src="nft.image"
+      :alt="nft.name"
+      class="tale-cover-image"
+      @error="handleImageError"
+    />
+    <img
+      v-else
+      src="https://placehold.co/600x400/gray/white?text=No+Image"
+      alt="Default NFT Cover"
+      class="tale-cover-image"
+    />
+    <div class="tale-card-content">
+      <h3 class="tale-title">{{ nft.name || 'Unnamed NFT' }}</h3>
+      <p class="tale-meta">Creator: {{ shortenAddress(nft.creator) }}</p>
+      <p class="tale-meta">Price: {{ nft.price != null ? nft.price.toFixed(3) : '--' }} SOL</p>
+      <p class="cm-detail-item">
+        Remaining: <span class="cm-detail-value">{{ nft.itemsAvailable != null ? nft.itemsRemaining : '--' }} / {{ nft.itemsAvailable != null ? nft.itemsAvailable : '??' }}</span>
+      </p>
+      <p class="tale-meta">Minted: <span class="cm-detail-value">{{ nft.itemsMinted != null ? nft.itemsMinted : '--' }}</span></p>
+      <button class="btn btn-info read-more-button">Mint & Get Special Access</button>
     </div>
   </div>
 </template>
 
 <script>
-import { ref } from 'vue';
-
 export default {
   name: 'NFTCard',
   props: {
@@ -51,13 +41,16 @@ export default {
   },
   setup() {
     const handleImageError = (event) => {
-      event.target.src = '/placeholder-nft.png'; // Fallback image
+      event.target.src = 'https://placehold.co/600x400/gray/white?text=No+Image';
     };
-
+    const shortenAddress = (address, chars = 6) => address ? `${address.slice(0, chars)}...${address.slice(-chars)}` : '';
     return {
-      handleImageError
+      handleImageError,
+      shortenAddress
     };
   },
   emits: ['buy']
 };
 </script>
+
+<!-- No extra style needed, uses global .tale-card etc. from Home.vue -->

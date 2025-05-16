@@ -261,6 +261,7 @@ export default {
           
           // // Save to backend
           await saveNFTToDatabase(nftListingData);
+          console.log("NFT Listing Data:", nftListingData);
           router.push({ name: 'NFTDetail', params: { mint: result.mint } });
         } else {
           error.value = result.error || 'Failed to create NFT';
