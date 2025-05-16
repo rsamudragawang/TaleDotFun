@@ -64,6 +64,38 @@
         </button>
         <p class="form-text info-text">You'll be asked to sign a message to verify wallet ownership.</p>
       </div>
+      <!-- Published Series Tab -->
+      <div v-if="isAuthenticated && activeTabs === 'series'">
+        <h2 class="text-2xl font-bold mb-6 text-white">Your Published Series</h2>
+        <div v-if="isLoadingTales" class="text-center py-8 text-slate-400">Loading your stories...</div>
+        <div v-else-if="userTales.length === 0" class="text-center py-8 text-slate-400">You haven't published any series yet.</div>
+        <div v-else class="grid grid-cols-12 gap-6">
+          <div class="col-span-12 md:col-span-6 lg:col-span-3" v-for="tale in userTales" :key="tale.publicKey.toString()">
+            <div class="rounded-lg p-4 bg-gradient-to-b from-[#372754] to-[#2a1d40]">
+              <div class="bg-[#43B4CA] rounded-lg p-8 relative">
+                <img src="/public/icons/grid.svg" alt="" class="absolute top-[4%] right-[8%] w-[85%] z-0">
+                <img :src="tale.account.thumbnailCid ? `https://gateway.pinata.cloud/ipfs/${tale.account.thumbnailCid}` : '/public/images/comic_1.png'" alt="Featured Content"
+                  class="w-full mx-auto rounded-lg object-cover z-10 relative">
+                <div class="flex justify-between mt-5 relative z-10">
+                  <div class="text-white text-xs p-2 bg-[rgba(0,0,0,0.4)] rounded-full border">{{ tale.chapterCount }} Chapter</div>
+                  <div class="relative">
+                    <div
+                      class="absolute right-0 top-0 font-bold min-w-[80px] text-xs text-black rounded-full bg-[#DBB106] px-2 py-2 border-white border">
+                      {{ formatLikeCount(tale.likeCount) }} Likes
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <p class="text-medium text-lg mt-4 text-white">{{ tale.account.title }}</p>
+              <div class="flex w-fit text-sm justify-start mt-4 p-1 px-3 items-center gap-4 bg-slate-800 rounded-full">
+                <img src="/public/icons/nft.svg" alt="" class="w-[20px] h-[20px]">
+                <p>{{ tale.nftCount }} NFTs Collection</p>
+              </div>
+              <button class="w-full mt-4 btn btn-primary">Update This Series</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </main>
     <!-- <div>
       <div v-if="!wallet.connected.value" >
@@ -160,6 +192,9 @@ import { useWallet, WalletMultiButton } from 'solana-wallets-vue';
 import axios from 'axios';
 import { Buffer } from 'buffer'; // Needed for TextEncoder if running in environment where it's not global
 import AvatarUploader from './AvatarUploader.vue';
+import { Connection, PublicKey } from '@solana/web3.js';
+import { Program, AnchorProvider } from '@coral-xyz/anchor';
+import taleStoryIdl from '../anchor/tale_story.json';
 
 const router = useRouter();
 const route = useRoute();
@@ -447,6 +482,65 @@ async function handleAvatarSelected(file) {
     avatarUploading.value = false;
   }
 }
+
+const SOLANA_RPC_URL = import.meta.env.VITE_RPC_ENDPOINT || 'https://api.devnet.solana.com';
+const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
+const isLoadingTales = ref(false);
+const allTales = ref([]);
+const allEpisodes = ref([]);
+
+const userTales = computed(() => {
+  if (!wallet.connected.value || !wallet.publicKey.value) return [];
+  const userAddress = wallet.publicKey.value.toBase58();
+  // Filter tales by author
+  return allTales.value
+    .filter(tale => tale.account.author.toBase58() === userAddress)
+    .map(tale => {
+      // Count chapters (episodes with parentTale == tale.publicKey)
+      const chapterCount = allEpisodes.value.filter(e => e.account.parentTale.toBase58() === tale.publicKey.toBase58()).length;
+      // Count NFTs (episodes with parentTale == tale.publicKey && isNft)
+      const nftCount = allEpisodes.value.filter(e => e.account.parentTale.toBase58() === tale.publicKey.toBase58() && e.account.isNft).length;
+      // Like count from on-chain
+      const likeCount = tale.account.likeCount || 0;
+      return {
+        ...tale,
+        chapterCount,
+        nftCount,
+        likeCount
+      };
+    });
+});
+
+function formatLikeCount(count) {
+  if (count >= 1000) return (count / 1000).toFixed(1) + 'K';
+  return count;
+}
+
+async function fetchUserTalesAndEpisodes() {
+  if (!wallet.connected.value || !wallet.publicKey.value) return;
+  isLoadingTales.value = true;
+  try {
+    const provider = new AnchorProvider(connection, wallet.wallet.value.adapter, AnchorProvider.defaultOptions());
+    const program = new Program(taleStoryIdl, provider);
+    const tales = await program.account.tale.all();
+    const episodes = await program.account.episode.all();
+    allTales.value = tales;
+    allEpisodes.value = episodes;
+  } catch (e) {
+    allTales.value = [];
+    allEpisodes.value = [];
+  } finally {
+    isLoadingTales.value = false;
+  }
+}
+
+watch(() => wallet.connected.value, (isConnected) => {
+  if (isConnected) fetchUserTalesAndEpisodes();
+});
+
+onMounted(() => {
+  if (wallet.connected.value) fetchUserTalesAndEpisodes();
+});
 
 </script>
 
