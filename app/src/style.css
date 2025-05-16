@@ -10,6 +10,8 @@
   --primary-light: #5B86E5; /* Lighter shade for hover states */
   --primary-dark: #274B9C; /* Darker shade for active states */
   --p-button-primary-hover-background: #322d95 !important;
+  --p-button-primary-active-background: #322d95 !important;
+  --p-button-primary-active-color: #fff !important;
   --p-button-primary-hover-color: #fff !important;
   --p-button-primary-hover-border-color: #fff !important;
 }

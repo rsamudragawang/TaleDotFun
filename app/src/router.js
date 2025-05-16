@@ -46,7 +46,9 @@ import Auth from './components/auth.vue'; // Or './views/Auth.vue' if you move i
 import TaleManager from './components/TaleManager.vue';
 import CandyMachineCreator from './components/CandyMachineCreator.vue';
 import MintComponent from './components/MintComponent.vue';
-import Governance from './components/Governance.vue';
+// import Governance from './components/Governance.vue';
+import GovernanceDetail from './views/GovernanceDetail.vue';
+import Governance from './views/Governance.vue';
 import LaunchNFT from './views/LaunchNft.vue';
 import PublishNFT from './views/PublishNft.vue';
 
@@ -80,6 +82,12 @@ const routes = [
     name: 'Governance',
     component: Governance,
   },
+  {
+    path: '/governance/:id',
+    name: 'GovernanceDetail',
+    component: GovernanceDetail,
+  },
+
   {
     path: '/mint/:candyMachineAddress', // General mint page, or make it dynamic like /mint/:candyMachineAddress
     name: 'MintPage',

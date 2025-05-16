@@ -9,7 +9,7 @@
             </p>
         </div>
         <div class="mt-[56px] flex gap-[24px] justify-center">
-            <Button>
+            <Button @click="router.push('/publish-nft')">
                 <img src="/public/icons/number.svg" alt="publish">
                 Publish Your Own NFTs</Button>
             <Button severity="secondary">
@@ -56,6 +56,10 @@
 
 <script setup>
 import Button from 'primevue/button';
+import { useRouter } from 'vue-router';
+
+const router = useRouter();
 </script>
+
 
 <style scoped></style>

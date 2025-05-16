@@ -177,7 +177,8 @@
         class="-mx-[60px] mt-[20px]">
         <template #item="slotProps">
           <div class="mx-2 rounded-lg" style="background-color: rgba(0, 0, 0, 0.5);">
-            <img src="/public/images/nft_chromatic.png" alt="test">
+            <img src="/public/images/nft_chromatic.png" alt="test" class="
+            w-full">
             <div class="relative p-4">
               <div class="mt-5">
                 <h1 class="text-lg">Chromatic Soul</h1>
