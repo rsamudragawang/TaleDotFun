@@ -59,35 +59,26 @@
         <TabPanels :pt="{ 'root': '!bg-transparent !border-color-transparent' }">
           <TabPanel header="Featured" :value="0">
             <div class="grid grid-cols-12 gap-4 mt-8">
-              <div class="col-span-12 md:col-span-6 lg:col-span-3" v-for="item in 10" :key="item">
+              <div class="col-span-12 md:col-span-6 lg:col-span-3" v-for="tale in featuredTales" :key="tale.publicKey.toString()">
                 <div class="rounded-lg p-4 bg-gradient-to-b from-[#372754] to-[#2a1d40]">
                   <div class="bg-[#43B4CA] rounded-lg p-8 relative">
                     <img src="/public/icons/grid.svg" alt="" class="absolute top-[4%] right-[8%] w-[85%] z-0">
-                    <img src="/public/images/comic_1.png" alt="Featured Content"
+                    <img :src="tale.account.thumbnailCid ? `https://gateway.pinata.cloud/ipfs/${tale.account.thumbnailCid}` : '/public/images/comic_1.png'" alt="Featured Content"
                       class="w-full mx-auto rounded-lg object-cover z-10 relative">
                     <div class="flex justify-between mt-5 relative z-10">
-                      <div class="text-white text-xs p-2 bg-[rgba(0,0,0,0.4)] rounded-full border">7
-                        Chapters</div>
+                      <div class="text-white text-xs p-2 bg-[rgba(0,0,0,0.4)] rounded-full border">{{ tale.chapterCount }} Chapters</div>
                       <div class="relative">
-                        <AvatarGroup class="mr-[65px]">
-                          <Avatar image="https://primefaces.org/cdn/primevue/images/avatar/amyelsner.png"
-                            shape="circle" />
-                          <Avatar image="https://primefaces.org/cdn/primevue/images/avatar/ionibowcher.png"
-                            shape="circle" />
-                          <Avatar image="https://primefaces.org/cdn/primevue/images/avatar/xuxuefeng.png"
-                            shape="circle" />
-                        </AvatarGroup>
                         <div
                           class="absolute right-0 top-0 font-bold min-w-[80px] text-xs text-black rounded-full bg-[#DBB106] px-2 py-2 border-white border">
-                          1.2K Votes</div>
+                          {{ formatLikeCount(tale.likeCount) }} Likes
+                        </div>
                       </div>
                     </div>
                   </div>
-                  <p class="text-medium text-lg mt-4">The Legend of Story Batu Menangis</p>
-                  <div
-                    class="flex w-fit text-sm justify-start mt-4 p-1 px-3 items-center gap-4 bg-slate-800 rounded-full">
+                  <p class="text-medium text-lg mt-4">{{ tale.account.title }}</p>
+                  <div class="flex w-fit text-sm justify-start mt-4 p-1 px-3 items-center gap-4 bg-slate-800 rounded-full">
                     <img src="/public/icons/nft.svg" alt="" class="w-[20px] h-[20px]">
-                    <p>2 NFTs Collection</p>
+                    <p>{{ tale.nftCount }} NFTs Collection</p>
                   </div>
                 </div>
               </div>
@@ -111,22 +102,42 @@
 
     <div class="mt-[48px] pt-[48px] border-t border-white">
       <h1 class="text-white text-2xl">Trending Author</h1>
-      <Carousel :value="[1, 2, 3, 3, 4]" :numVisible="3" :numScroll="1" :responsiveOptions="responsiveOptions"
-        class="-mx-[60px] mt-[20px]">
+      <p>{{ trendingAuthorsToShow }}</p>
+      <div v-if="trendingAuthorsToShow.length === 0" class="text-slate-400 text-center py-8">
+        No trending authors yet.
+      </div>
+      <Carousel 
+        v-else
+        :value="trendingAuthorsToShow" 
+        :numVisible="Math.min(3, trendingAuthorsToShow.length)" 
+        :numScroll="1" 
+        :responsiveOptions="responsiveOptions"
+        :autoplayInterval="3000"
+        :circular="true"
+        class="-mx-[60px] mt-[20px]"
+        @mouseenter="carouselPaused = true"
+        @mouseleave="carouselPaused = false"
+      >
         <template #item="slotProps">
-          <div class="mx-2 rounded-lg" style="background-color: rgba(0, 0, 0, 0.5);">
+          <div
+            v-if="slotProps.item"
+            :key="slotProps.item._id || slotProps.item.walletAddress || slotProps.index"
+            class="mx-2 rounded-lg"
+            style="background-color: rgba(0, 0, 0, 0.5);"
+          >
             <div class="h-[75px] rounded-t-lg relative"
               style="background-image: url(/public/icons/community_card.svg); background-size: cover; background-repeat: no-repeat; background-position: center;">
               <Tag severity="success" value="Favorite Author" class="absolute" style="right:5px; top: 5px" />
             </div>
             <div class="relative p-4">
-              <img src="/public/images/project-page.png" alt="Trending Author"
+              <img :src="slotProps.item.avatar || `https://ui-avatars.com/api/?rounded=true&bold=true&name=${encodeURIComponent(slotProps.item.name || 'User')}`" 
+                :alt="slotProps.item.name || 'Author'"
                 class="w-[64px] h-[64px] rounded-full translate-y-[-40px]">
               <div class="-mt-5">
-                <h1 class="text-lg">PolyFlow</h1>
+                <h1 class="text-lg">{{ slotProps.item.name || 'Unknown Author' }}</h1>
                 <div class="flex gap-4 py-4">
-                  <p class="text-sm">12 Stories</p>
-                  <p class="text-sm">64 NFTs Launched</p>
+                  <p class="text-sm">{{ slotProps.item.storyCount || 0 }} Stories</p>
+                  <p class="text-sm">{{ slotProps.item.nftCount || 0 }} NFTs Launched</p>
                 </div>
                 <Button class="w-full" severity="secondary">See Profile</Button>
               </div>
@@ -351,6 +362,7 @@ import taleNftIdl from '../anchor/tale_nft.json';
 import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
 import { walletAdapterIdentity } from '@metaplex-foundation/umi-signer-wallet-adapters';
 import { mplCandyMachine, fetchCandyMachine } from '@metaplex-foundation/mpl-candy-machine';
+import taleStoryIdl from '../anchor/tale_story.json';
 
 // --- Configuration ---
 const AUTH_API_BASE_URL = import.meta.env.VITE_APP_AUTH_API_URL || 'http://localhost:3000/api';
@@ -408,6 +420,12 @@ const responsiveOptions = ref([
 const inspiredNfts = ref([]);
 const isLoadingInspiredNfts = ref(false);
 const inspiredNftsError = ref('');
+const TALE_STORY_PROGRAM_ID = new PublicKey('6fDFNzPWHCpGfNBKJsEhxvRxaTSxvRptc9rtSQmmFQo2');
+const taleStoryProgram = ref(null);
+const featuredTales = ref([]);
+const trendingAuthors = ref([]);
+const isLoadingAuthors = ref(true);
+const carouselPaused = ref(false);
 
 // --- Computed Properties ---
 const publishedTales = computed(() => {
@@ -434,6 +452,9 @@ const creator = computed(()=>{
     );
     count_for_output_b += related_b_items_for_this_c.length;
   });
+
+  console.log("count_for_output_b", count_for_output_b);
+  
 
   return {
     _id: item_a._id,
@@ -700,10 +721,139 @@ watch(() => wallet.publicKey.value, (newVal, oldVal) => {
 });
 
 onMounted(() => {
-  fetchAppUser(); // Fetch user on mount
-  fetchUser()
+  fetchAppUser();
+  fetchUser();
   fetchInspiredNftsOnChain();
+  fetchFeaturedTales();
+  fetchTrendingAuthors();
   // fetchPublishedOnChainTales is called by the wallet watcher when program is ready
+});
+
+function formatLikeCount(count) {
+  if (count >= 1000) return (count / 1000).toFixed(1) + 'K';
+  return count;
+}
+
+async function fetchFeaturedTales() {
+  try {
+    const provider = new AnchorProvider(connection, wallet.wallet.value?.adapter || wallet, AnchorProvider.defaultOptions());
+    const taleStoryProgram = new Program(taleStoryIdl, provider);
+    const allTales = await taleStoryProgram.account.tale.all();
+    const allEpisodes = await taleStoryProgram.account.episode.all();
+
+    // Only published
+    const publishedTales = allTales.filter(t => t.account.status === 1);
+    // Sort by timestamp descending
+    publishedTales.sort((a, b) => Number(b.account.timestamp) - Number(a.account.timestamp));
+    // Take up to 4
+    const talesToShow = publishedTales.slice(0, 4);
+
+    for (const tale of talesToShow) {
+      // Chapters
+      tale.chapterCount = allEpisodes.filter(e => e.account.parentTale.toBase58() === tale.publicKey.toBase58()).length;
+      // NFTs
+      tale.nftCount = allEpisodes.filter(e => e.account.parentTale.toBase58() === tale.publicKey.toBase58() && e.account.isNft).length;
+      // Like count
+      tale.likeCount = tale.account.likeCount || 0;
+      // Author info
+      try {
+        const res = await fetch(`${AUTH_API_BASE_URL}/users/address/${tale.account.author.toBase58()}`);
+        if (res.ok) {
+          const { data } = await res.json();
+          tale._authorName = data.name;
+          tale._avatars = [data.avatar];
+        } else {
+          tale._authorName = tale.account.author.toBase58();
+          tale._avatars = [];
+        }
+      } catch {
+        tale._authorName = tale.account.author.toBase58();
+        tale._avatars = [];
+      }
+    }
+    featuredTales.value = talesToShow;
+  } catch (e) {
+    featuredTales.value = [];
+    console.error('Failed to fetch featured tales:', e);
+  }
+}
+
+async function fetchTrendingAuthors() {
+  try {
+    isLoadingAuthors.value = true;
+    // Fetch users from backend
+    const response = await authApiClient.get('/users');
+    console.log('Users API Response:', response.data);
+    const users = response.data.success ? response.data.data : [];
+    console.log('Parsed Users:', users);
+    
+    // Fetch on-chain data
+    const provider = new AnchorProvider(connection, wallet.wallet.value?.adapter || wallet, AnchorProvider.defaultOptions());
+    const taleStoryProgram = new Program(taleStoryIdl, provider);
+    const allTales = await taleStoryProgram.account.tale.all();
+    const allEpisodes = await taleStoryProgram.account.episode.all();
+    console.log('On-chain Tales:', allTales);
+    console.log('On-chain Episodes:', allEpisodes);
+
+    // Calculate stories and NFTs for each user
+    const authorsWithStats = users.map(user => {
+      if (!user || !user.walletAddress) {
+        console.log('Skipping user due to missing data:', user);
+        return null;
+      }
+
+      const userTales = allTales.filter(tale => 
+        tale.account.author.toBase58() === user.walletAddress && 
+        tale.account.status === 1 // Only published tales
+      );
+      
+      const userNfts = allEpisodes.filter(episode => 
+        episode.account.author.toBase58() === user.walletAddress && 
+        episode.account.isNft
+      );
+
+      console.log(`User ${user.name} stats:`, {
+        walletAddress: user.walletAddress,
+        storyCount: userTales.length,
+        nftCount: userNfts.length
+      });
+
+      return {
+        ...user,
+        storyCount: userTales.length,
+        nftCount: userNfts.length,
+        avatar: user.avatar || `https://ui-avatars.com/api/?rounded=true&bold=true&name=${encodeURIComponent(user.name || 'User')}`
+      };
+    }).filter(Boolean); // Remove any null entries
+
+    console.log('Authors with stats:', authorsWithStats);
+
+    // Sort by story count and take top 5
+    trendingAuthors.value = authorsWithStats
+      .filter(author => author.storyCount > 0)
+      .sort((a, b) => b.storyCount - a.storyCount)
+      .slice(0, 5);
+
+    console.log('Final trending authors:', trendingAuthors.value);
+
+  } catch (error) {
+    console.error('Failed to fetch trending authors:', error);
+    trendingAuthors.value = [];
+  } finally {
+    isLoadingAuthors.value = false;
+  }
+}
+
+const trendingAuthorsToShow = computed(() => {
+  const arr = trendingAuthors.value;
+  if (arr.length === 0) return [];
+  if (arr.length >= 3) return arr;
+  // Duplicate items to reach at least 3
+  let result = [];
+  while (result.length < 3) {
+    result = result.concat(arr);
+  }
+  return result.slice(0, 3);
 });
 
 </script>

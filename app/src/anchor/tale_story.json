@@ -331,6 +331,31 @@
       "args": []
     },
     {
+      "name": "like_tale",
+      "discriminator": [
+        69,
+        180,
+        62,
+        209,
+        22,
+        103,
+        161,
+        94
+      ],
+      "accounts": [
+        {
+          "name": "tale_account",
+          "writable": true
+        },
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "update_episode",
       "discriminator": [
         222,
@@ -763,6 +788,10 @@
           {
             "name": "is_real_world_asset_gated",
             "type": "bool"
+          },
+          {
+            "name": "like_count",
+            "type": "u64"
           }
         ]
       }
