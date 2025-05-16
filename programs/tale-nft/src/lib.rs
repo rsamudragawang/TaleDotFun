@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
 // Program ID from your provided IDL
-declare_id!("GzummSyWSKsn6eLH5a3iUoFWw8kuF6NFHa7VpLFqWKnh");
+declare_id!("D4v7sUNHx1bsdHnBPMtZ2MeS1YssNk9iJqzCAQX3Qyik");
 
 // --- Errors ---
 #[error_code]
