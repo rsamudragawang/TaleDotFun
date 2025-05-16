@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
 // Program ID from your provided IDL
-declare_id!("6fDFNzPWHCpGfNBKJsEhxvRxaTSxvRptc9rtSQmmFQo2");
+declare_id!("FuHt8d5LN4fr2KrT9N4cb4WSsLBsm5aXgHUkEEGzxSU9");
 
 // --- Errors ---
 #[error_code]
@@ -70,6 +70,7 @@ pub struct Tale {
     pub is_governance_token_gated: bool,
     pub is_early_access_token_gated: bool,
     pub is_real_world_asset_gated: bool,
+    pub like_count: u64,
 }
 
 // Recalculated Space for Tale:
@@ -88,9 +89,10 @@ pub struct Tale {
 // is_governance_token_gated: 1
 // is_early_access_token_gated: 1
 // is_real_world_asset_gated: 1
-// Sum of fields = 8+32+36+104+94+34+68+68+1+8+1+33+1+1+1 = 490 bytes
+// like_count: 8
+// Sum of fields = 8+32+36+104+94+34+68+68+1+8+1+33+1+1+1+8 = 490 bytes
 // Buffer: Let's use 38 to make it 528 (divisible by 8)
-const TALE_ACCOUNT_SPACE: usize = 490 + 38; // Total 528 bytes
+const TALE_ACCOUNT_SPACE: usize = 490 + 38 + 8; // Total 536 bytes (add 8 for u64 like_count)
 
 #[account]
 pub struct Episode {
@@ -169,6 +171,7 @@ pub mod tale_story {
         tale.is_governance_token_gated = is_governance;
         tale.is_early_access_token_gated = is_early_access;
         tale.is_real_world_asset_gated = is_real_world;
+        tale.like_count = 0;
         msg!("Tale created: {}, Content CID: {}, Thumbnail: {}", tale.title, tale.content_cid, tale.thumbnail_cid);
         Ok(())
     }
@@ -321,6 +324,13 @@ pub mod tale_story {
         msg!("Episode '{}' liked by {}. New like count: {}", episode.episode_name, ctx.accounts.user.key(), episode.like_count);
         Ok(())
     }
+
+    pub fn like_tale(ctx: Context<LikeTale>) -> Result<()> {
+        let tale = &mut ctx.accounts.tale_account;
+        tale.like_count = tale.like_count.checked_add(1).ok_or(AppError::LikeCountOverflow)?;
+        msg!("Tale '{}' liked by {}. New like count: {}", tale.title, ctx.accounts.user.key(), tale.like_count);
+        Ok(())
+    }
 }
 
 // --- Contexts ---
@@ -430,6 +440,14 @@ pub struct DeleteEpisode<'info> {
 pub struct LikeEpisode<'info> {
     #[account(mut)]
     pub episode_account: Account<'info, Episode>,
+    #[account(mut)]
+    pub user: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct LikeTale<'info> {
+    #[account(mut)]
+    pub tale_account: Account<'info, Tale>,
     #[account(mut)]
     pub user: Signer<'info>,
 }
