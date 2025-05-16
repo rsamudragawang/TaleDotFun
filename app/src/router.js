@@ -51,6 +51,7 @@ import GovernanceDetail from './views/GovernanceDetail.vue';
 import Governance from './views/Governance.vue';
 import LaunchNFT from './views/LaunchNft.vue';
 import PublishNFT from './views/PublishNft.vue';
+import CreateSeries from './views/CreateSeries.vue';
 
 // If you have a specific view for Tale Details that might use EpisodeManager
 const TaleDetailView = () => import('./views/TaleDetailView.vue'); // Example for lazy loading
@@ -87,7 +88,11 @@ const routes = [
     name: 'GovernanceDetail',
     component: GovernanceDetail,
   },
-
+  {
+    path: '/create-series',
+    name: 'CreateSeries',
+    component: CreateSeries
+  },
   {
     path: '/mint/:candyMachineAddress', // General mint page, or make it dynamic like /mint/:candyMachineAddress
     name: 'MintPage',
