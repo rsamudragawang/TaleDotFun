@@ -77,6 +77,10 @@
         {
           "name": "choice_index",
           "type": "u8"
+        },
+        {
+          "name": "is_nft_holder",
+          "type": "bool"
         }
       ]
     },

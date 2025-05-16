@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{Token, TokenAccount};
+use anchor_spl::token::{Token};
 
 // Ensure this matches the program ID you are deploying to and testing against
 declare_id!("4ezUiWjyURnQrsZKifJexyBEG3qUh8XyvevtVK3erN2i");
@@ -66,7 +66,7 @@ pub mod tale_governance {
         Ok(())
     }
 
-    pub fn cast_vote(ctx: Context<CastVote>, choice_index: u8) -> Result<()> {
+    pub fn cast_vote(ctx: Context<CastVote>, choice_index: u8, is_nft_holder: bool) -> Result<()> {
         let vote = &mut ctx.accounts.vote;
         let vote_record = &mut ctx.accounts.vote_record;
         let clock = Clock::get()?;
@@ -77,14 +77,13 @@ pub mod tale_governance {
         require!(choice_index < vote.choices.len() as u8, GovernanceError::InvalidChoice);
         require!(!vote_record.has_voted, GovernanceError::AlreadyVoted);
 
-        // New logic: check if voter owns any NFT from any Candy Machine in vote.nfts
-        // NOTE: This check requires off-chain or CPI logic to verify ownership of an NFT minted by any of the Candy Machine IDs in vote.nfts.
-        // For now, you may want to add a placeholder or require this check to be done off-chain.
-        // Example placeholder:
-        // require!(user_owns_nft_from_candy_machine(ctx.accounts.voter.key(), vote.nfts), GovernanceError::NotNFTOwner);
-
-        // For now, we will just use regular_vote_power for all voters (update as needed):
-        let vote_power = vote.regular_vote_power;
+        // Use NFT or regular vote power based on is_nft_holder
+        let vote_power = if is_nft_holder { vote.nft_vote_power } else { vote.regular_vote_power };
+        if is_nft_holder {
+            vote.nft_voters += 1;
+        } else {
+            vote.regular_voters += 1;
+        }
 
         vote.total_votes[choice_index as usize] += vote_power;
         vote.total_participants += 1;
