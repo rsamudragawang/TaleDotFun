@@ -21,3 +21,23 @@ body {
   font-family: "Space Grotesk", sans-serif;
   font-optical-sizing: auto;
 }
+
+.p-step-number {
+  color: white !important;
+  background: transparent !important;
+  border: 1px solid #CB33AD !important;
+}
+
+.p-step-number[data-p="active"] {
+  background: #CB33AD !important;
+}
+
+.p-stepper-separator {
+  background: white !important;
+}
+
+.p-step-title {
+  color: white !important;
+}
+
+

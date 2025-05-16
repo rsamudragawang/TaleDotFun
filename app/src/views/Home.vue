@@ -102,7 +102,6 @@
 
     <div class="mt-[48px] pt-[48px] border-t border-white">
       <h1 class="text-white text-2xl">Trending Author</h1>
-      <p>{{ trendingAuthorsToShow }}</p>
       <div v-if="trendingAuthorsToShow.length === 0" class="text-slate-400 text-center py-8">
         No trending authors yet.
       </div>
@@ -120,8 +119,7 @@
       >
         <template #item="slotProps">
           <div
-            v-if="slotProps.item"
-            :key="slotProps.item._id || slotProps.item.walletAddress || slotProps.index"
+            :key="slotProps"
             class="mx-2 rounded-lg"
             style="background-color: rgba(0, 0, 0, 0.5);"
           >
@@ -130,20 +128,21 @@
               <Tag severity="success" value="Favorite Author" class="absolute" style="right:5px; top: 5px" />
             </div>
             <div class="relative p-4">
-              <img :src="slotProps.item.avatar || `https://ui-avatars.com/api/?rounded=true&bold=true&name=${encodeURIComponent(slotProps.item.name || 'User')}`" 
-                :alt="slotProps.item.name || 'Author'"
+              <img :src="slotProps?.data?.avatar || `https://ui-avatars.com/api/?rounded=true&bold=true&name=${encodeURIComponent(slotProps?.data?.name || 'User')}`" 
+                :alt="slotProps?.data?.name || 'Author'"
                 class="w-[64px] h-[64px] rounded-full translate-y-[-40px]">
               <div class="-mt-5">
-                <h1 class="text-lg">{{ slotProps.item.name || 'Unknown Author' }}</h1>
+                <h1 class="text-lg">{{ slotProps.data.name || 'Unknown Author' }}</h1>
                 <div class="flex gap-4 py-4">
-                  <p class="text-sm">{{ slotProps.item.storyCount || 0 }} Stories</p>
-                  <p class="text-sm">{{ slotProps.item.nftCount || 0 }} NFTs Launched</p>
+                  <p class="text-sm">{{ slotProps.data.storyCount || 0 }} Stories</p>
+                  <p class="text-sm">{{ slotProps.data.nftCount || 0 }} NFTs Launched</p>
                 </div>
                 <Button class="w-full" severity="secondary">See Profile</Button>
               </div>
             </div>
           </div>
         </template>
+       
       </Carousel>
     </div>
 
