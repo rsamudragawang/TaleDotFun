@@ -1,5 +1,5 @@
 {
-  "address": "HTEJ6qZURvoHMwDCkDHNnfYYhcfCVkmzNTBDjKQHb1mF",
+  "address": "4ezUiWjyURnQrsZKifJexyBEG3qUh8XyvevtVK3erN2i",
   "metadata": {
     "name": "tale_governance",
     "version": "0.1.0",
@@ -188,12 +188,6 @@
           "type": "i64"
         },
         {
-          "name": "nft_mint",
-          "type": {
-            "option": "pubkey"
-          }
-        },
-        {
           "name": "regular_vote_power",
           "type": "u64"
         },
@@ -211,6 +205,18 @@
         },
         {
           "name": "tags",
+          "type": {
+            "vec": "string"
+          }
+        },
+        {
+          "name": "stories",
+          "type": {
+            "vec": "pubkey"
+          }
+        },
+        {
+          "name": "nfts",
           "type": {
             "vec": "string"
           }
@@ -459,12 +465,6 @@
             "type": "i64"
           },
           {
-            "name": "nft_mint",
-            "type": {
-              "option": "pubkey"
-            }
-          },
-          {
             "name": "regular_vote_power",
             "type": "u64"
           },
@@ -529,6 +529,28 @@
           {
             "name": "total_vote_power",
             "type": "u64"
+          },
+          {
+            "name": "stories",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "nfts",
+            "type": {
+              "vec": "string"
+            }
+          },
+          {
+            "name": "history",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "VoteHistory"
+                }
+              }
+            }
           }
         ]
       }
@@ -552,6 +574,30 @@
           },
           {
             "name": "Other"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VoteHistory",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "voter",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          },
+          {
+            "name": "voting_power",
+            "type": "u64"
+          },
+          {
+            "name": "transaction",
+            "type": "string"
           }
         ]
       }
