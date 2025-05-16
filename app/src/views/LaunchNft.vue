@@ -242,9 +242,12 @@ async function fetchListedNftsWithMetadata() {
                         name = cmData.data.name;
                     }
 
+                    console.log("pricez", Number(cmData.header.lamports.basisPoints) / 1_000_000_000);
+                    
+
                     // Assuming solPayment guard is present for price
-                    if (cmData.candyGuard && cmData.candyGuard.guards.solPayment.__option === 'Some') {
-                        price = Number(cmData.candyGuard.guards.solPayment.value.lamports.basisPoints) / 1_000_000_000;
+                    if (cmData.header.lamports.basisPoints) {
+                        price = Number(cmData.header.lamports.basisPoints) / 1_000_000_000;
                     } else if (cmData.configLineSettings && cmData.configLineSettings.prefixName){ //legacy
                         name = cmData.configLineSettings.prefixName;
                     }

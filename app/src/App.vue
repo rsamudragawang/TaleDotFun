@@ -136,9 +136,14 @@ export default {
           </nav>
         </div>
         <div class="header-right">
-          <router-link :to="{ name: 'Auth' }" class="profile-link btn btn-primary-nav">
-            Profile
+          <router-link
+            v-if="wallet.connected.value && wallet.publicKey.value"
+            :to="{ name: 'Auth' }"
+            class="profile-link btn btn-primary-nav flex items-center gap-2"
+          >
+            <span class="wallet-address">{{ shortenAddress(wallet.publicKey.value.toBase58()) }}</span>
           </router-link>
+          <WalletMultiButton v-else />
           <div class="mobile-menu-button-container">
             <button @click="mobileMenuOpen = !mobileMenuOpen" type="button" class="mobile-menu-button">
               <span class="sr-only">Open main menu</span>
@@ -180,12 +185,19 @@ export default {
 <script setup>
 import { WalletMultiButton } from 'solana-wallets-vue';
 import { ref, onMounted, onUnmounted } from 'vue';
+import { useWallet } from 'solana-wallets-vue';
 
 const mobileMenuOpen = ref(false);
 const isScrolled = ref(false);
+const wallet = useWallet();
 
 const handleScroll = () => {
   isScrolled.value = window.scrollY > 0;
+};
+
+const shortenAddress = (address, chars = 6) => {
+  if (!address) return '';
+  return `${address.slice(0, chars)}...${address.slice(-chars)}`;
 };
 
 onMounted(() => {
