@@ -135,8 +135,8 @@ pub mod tale_nft { // Module name from your IDL
     // --- New ListedNft Instructions ---
 
     /// Creates a new listing record for an NFT.
-    /// The `nft_mint_address` is the mint of the actual NFT being listed.
-    /// The `candy_machine_address` is the CM it's associated with.
+    /// The nft_mint_address is the mint of the actual NFT being listed.
+    /// The candy_machine_address is the CM it's associated with.
     pub fn list_nft(
         ctx: Context<ListNft>,
         nft_mint_address_arg: Pubkey,
@@ -167,7 +167,7 @@ pub mod tale_nft { // Module name from your IDL
     }
 
     /// Updates the associated Candy Machine for a listed NFT.
-    /// Only the original `creator_wallet` can update.
+    /// Only the original creator_wallet can update.
     pub fn update_listed_nft(
         ctx: Context<UpdateListedNft>,
         new_candy_machine_address_arg: Pubkey,
@@ -177,11 +177,11 @@ pub mod tale_nft { // Module name from your IDL
         }
 
         let listed_nft = &mut ctx.accounts.listed_nft_account;
-        // `has_one = creator_wallet` in Context already verifies authority
+        // has_one = creator_wallet in Context already verifies authority
 
         listed_nft.candy_machine_address = new_candy_machine_address_arg;
         // Optionally update timestamp or add an updated_at field if needed
-        // listed_nft.listed_at = Clock::get()?.unix_timestamp; // Or an `updated_at` field
+        // listed_nft.listed_at = Clock::get()?.unix_timestamp; // Or an updated_at field
 
         msg!(
             "Listed NFT {} updated by {}. New Candy Machine: {}",
@@ -193,10 +193,10 @@ pub mod tale_nft { // Module name from your IDL
     }
 
     /// Removes (unlists) an NFT listing.
-    /// Only the original `creator_wallet` can unlist.
-    /// This closes the `ListedNft` account and returns lamports to the creator.
+    /// Only the original creator_wallet can unlist.
+    /// This closes the ListedNft account and returns lamports to the creator.
     pub fn unlist_nft(ctx: Context<UnlistNft>) -> Result<()> {
-        // `has_one = creator_wallet` and `close = creator_wallet` in Context handle checks and closing.
+        // has_one = creator_wallet and close = creator_wallet in Context handle checks and closing.
         msg!(
             "NFT {} unlisted by {}. Associated CM was: {}",
             ctx.accounts.listed_nft_account.nft_mint_address,
@@ -212,7 +212,7 @@ pub mod tale_nft { // Module name from your IDL
 
 // Existing Mint Activity Contexts (remain unchanged)
 #[derive(Accounts)]
-#[instruction(candy_machine_id_arg: Pubkey, transaction_signature_str: String, episode_on_chain_pda_option: Option<Pubkey>)]
+#[instruction(candy_machine_id_arg: Pubkey)]
 pub struct LogMintActivity<'info> {
     #[account(
         init,
@@ -221,7 +221,7 @@ pub struct LogMintActivity<'info> {
         seeds = [
             b"mint_activity".as_ref(),
             user_wallet.key().as_ref(),
-            nft_mint_address.key().as_ref() // nft_mint_address is AccountInfo here
+            candy_machine_id_arg.as_ref() // nft_mint_address is AccountInfo here
         ],
         bump
     )]

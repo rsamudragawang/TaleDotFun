@@ -1,6 +1,91 @@
 <template>
-  <div class="auth-container">
-    <h1 class="auth-title">User Authentication</h1>
+  <div>
+    <main class="max-w-4xl mx-auto px-4 py-12 flex flex-col items-center">
+      <!-- Profile Avatar -->
+      <div class="relative mb-4">
+        <div class="w-32 h-32 rounded-full overflow-hidden border-4 border-purple-400 shadow-lg">
+          <img 
+            src="" 
+            alt="Profile Avatar" 
+            class="w-full h-full object-cover"
+          />
+        </div>
+      </div>
+
+      <!-- Username -->
+      <h1 class="text-3xl font-bold mb-16">{{ isAuthenticated ? currentUser.name:'Profile' }}</h1>
+      <!-- Wallet Address -->
+      <div v-if="isAuthenticated" class="bg-purple-600 rounded-full px-4 py-1 text-sm">
+        {{ shortenAddress(wallet.publicKey.value.toBase58()) }}
+      </div>
+      <div v-if="isAuthenticated" class="bg-purple-800/50 backdrop-blur-sm rounded-full p-1 flex mt-10 mb-10">
+        <button
+          @click="setActiveTab('series')"
+          :class="[
+            'px-6 py-2 rounded-full font-medium transition',
+            activeTabs === 'series' ? 'bg-white text-purple-900' : 'text-gray-300 hover:text-white'
+          ]"
+        >
+          Published Series
+        </button>
+        <button
+          @click="setActiveTab('nft')"
+          :class="[
+            'px-6 py-2 rounded-full font-medium transition',
+            activeTabs === 'nft' ? 'bg-white text-purple-900' : 'text-gray-300 hover:text-white'
+          ]"
+        >
+          Published NFT
+        </button>
+        <button
+          @click="setActiveTab('minted')"
+          :class="[
+            'px-6 py-2 rounded-full font-medium transition',
+            activeTabs === 'minted' ? 'bg-white text-purple-900' : 'text-gray-300 hover:text-white'
+          ]"
+        >
+          NFTs Minted
+        </button>
+      </div>
+      
+      <!-- Wallet Connection Card -->
+      <div v-if="!wallet.connected.value" class="w-full bg-purple-950/50 backdrop-blur-sm rounded-xl p-10 flex flex-col items-center">
+        <h2 class="text-2xl font-semibold mb-3">Wallet Not Connected</h2>
+        <p class="text-gray-300 text-center max-w-md mb-8">
+          To explore the full power of Tale.Fun, 
+          you need to connect your wallet.
+        </p>
+        <WalletMultiButton/>
+      </div>
+      <div v-if="wallet.connected.value && !isAuthenticated && !showRegistrationForm && !pendingSignatureVerification" class="w-full bg-purple-950/50 backdrop-blur-sm rounded-xl p-10 flex flex-col items-center">
+        <h2 class="text-2xl font-semibold mb-3">Verify Ownership</h2>
+        <button @click="handleSignMessageAndVerify" :disabled="isLoadingAuth" class="btn btn-primary action-button">
+          {{ isLoadingAuth ? 'Verifying...' : 'Sign With Wallet' }}
+        </button>
+        <p class="form-text info-text">You'll be asked to sign a message to verify wallet ownership.</p>
+      </div>
+    </main>
+    <!-- <div>
+      <div v-if="!wallet.connected.value" >
+        <p class="text-center">Wallet Not Connected</p>
+        <p class="text-center">To explore the full power of Tale.Fun, 
+          you need to connect your wallet. </p>
+        <div class="flex justify-center">
+          <WalletMultiButton/>
+        </div>
+      </div>
+      <div v-if="wallet.connected.value && !isAuthenticated && !showRegistrationForm && !pendingSignatureVerification" >
+        <h2>Verify Ownership</h2>
+        <button @click="handleSignMessageAndVerify" :disabled="isLoadingAuth" class="btn btn-primary action-button">
+          {{ isLoadingAuth ? 'Verifying...' : 'Sign With Wallet' }}
+        </button>
+        <p class="form-text info-text">You'll be asked to sign a message to verify wallet ownership.</p>
+      </div>
+      <div v-if="isAuthenticated" >
+       
+      </div>
+    </div> -->
+    <!-- <h1 class="auth-title">User Authentication</h1>
 
     <div class="auth-section wallet-section">
       <h2 class="section-title">1. Wallet Connection</h2>
@@ -21,9 +106,9 @@
         {{ isLoadingAuth ? 'Verifying...' : 'Login / Register with Wallet' }}
       </button>
       <p class="form-text info-text">You'll be asked to sign a message to verify wallet ownership.</p>
-    </div>
+    </div> -->
 
-    <div v-if="showRegistrationForm" class="auth-section registration-section">
+    <!-- <div v-if="showRegistrationForm" class="auth-section registration-section">
       <h2 class="section-title">3. Complete Your Profile</h2>
       <p class="registration-prompt">Welcome! Your wallet is verified. Please provide a display name to finish setting up your account.</p>
       <form @submit.prevent="handleCompleteRegistrationWithSignature" class="auth-form">
@@ -31,14 +116,6 @@
           <label for="nameInput" class="form-label">Your Name:</label>
           <input type="text" id="nameInput" v-model="name" class="form-input-auth" placeholder="Enter your display name" required>
         </div>
-        <!-- <div>
-          <label for="typeInput" class="form-label">User Type (optional):</label>
-          <select id="typeInput" v-model="userType" class="form-input-auth">
-            <option value="user">User</option>
-            <option value="creator">Creator</option>
-            <option value="customer">Customer</option>
-          </select>
-        </div> -->
         <button type="submit" :disabled="isLoadingAuth" class="btn btn-success form-submit-button">
           {{ isLoadingAuth ? 'Completing Registration...' : 'Complete Registration' }}
         </button>
@@ -72,7 +149,7 @@
          :class="['ui-message-box', uiMessage.type === 'error' ? 'error-box' : (uiMessage.type === 'success' ? 'success-box' : 'info-box')]"
          >
       {{ uiMessage.text }}
-    </div>
+    </div> -->
   </div>
 </template>
 
@@ -104,6 +181,8 @@ const signedAuthData = ref({ message: '', signature: null, walletAddress: '' });
 
 const isAuthenticated = computed(() => !!token.value && !!currentUser.value);
 
+const activeTabs = ref('series')
+
 // Form Inputs for registration
 const name = ref('');
 const userType = ref('creator');
@@ -124,7 +203,9 @@ function showUiMessage(msg, type = 'info', duration = 4000) {
     setTimeout(() => { uiMessage.value = { text: '', type: 'info' }; }, duration);
   }
 }
-
+const setActiveTab = (tabName) => {
+  activeTabs.value = tabName;
+};
 const shortenAddress = (address, chars = 6) => {
   if (!address) return '';
   return `${address.slice(0, chars)}...${address.slice(-chars)}`;
