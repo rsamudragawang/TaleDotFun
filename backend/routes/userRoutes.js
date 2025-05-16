@@ -6,12 +6,16 @@ const {
   updateUser,
   deleteUser,
   updateUserAvatar,
+  getUserByWalletAddress,
 } = require('../controllers/userController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 const multer = require('multer');
 const upload = multer(); // Use memory storage for buffer
 
 const router = express.Router();
+
+// Public route to get user by wallet address (must be before protect)
+router.route('/address/:walletAddress').get(getUserByWalletAddress);
 
 // All routes below this are protected by JWT
 router.use(protect);
