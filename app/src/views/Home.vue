@@ -4,7 +4,7 @@
     <div class="flex gap-8">
       <div class="flex-6 bg-white rounded-lg p-1">
         <div class="flex items-end w-full h-[365px] rounded-lg text-3xl text-white p-4"
-          style="background-image: url(/public/images/bg_header_1.png); background-size: cover; background-repeat: no-repeat;">
+          style="background-image: url(/images/bg_header_1.png); background-size: cover; background-repeat: no-repeat;">
           Your Gateway to Cultural<br> Webcomics & Digital Collectibles
         </div>
       </div>
@@ -124,7 +124,7 @@
             style="background-color: rgba(0, 0, 0, 0.5);"
           >
             <div class="h-[75px] rounded-t-lg relative"
-              style="background-image: url(/public/icons/community_card.svg); background-size: cover; background-repeat: no-repeat; background-position: center;">
+              style="background-image: url(/icons/community_card.svg); background-size: cover; background-repeat: no-repeat; background-position: center;">
               <Tag severity="success" value="Favorite Author" class="absolute" style="right:5px; top: 5px" />
             </div>
             <div class="relative p-4">

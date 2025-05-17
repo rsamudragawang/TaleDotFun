@@ -12,7 +12,7 @@
             </div>
             <div class="flex-1">
                 <div class="flex flex-col justify-between h-[317px] p-7"
-                    style="background-image: url('/public/images/bg_governance.png'); background-size: cover; background-repeat: no-repeat;">
+                    style="background-image: url('/images/bg_governance.png'); background-size: cover; background-repeat: no-repeat;">
                     <div></div>
                     <p class="text-white text-2xl font-bold text-center">Make Incredible<br>
                         Stories by Readers Choice</p>
