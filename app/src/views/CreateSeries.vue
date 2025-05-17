@@ -1,114 +1,121 @@
 <template>
     <div class="home-view">
         <Toast />
-        <Stepper :value="step">
-            <div
-                class="h-[300px] bg-gradient-to-b from-[#6435E9] to-[#381E83] rounded-lg flex flex-col justify-center px-[40px]">
-                <h1 class="text-white text-3xl font-bold text-center">Start Publishing<br> Your Series</h1>
-                <StepList class="!mt-[30px]">
-                    <Step :value="1">Set Your Series</Step>
-                    <Step :value="2">Upload Your First Chapter</Step>
-                </StepList>
+        <div
+            class="h-[300px] bg-gradient-to-b from-[#6435E9] to-[#381E83] rounded-lg flex flex-col justify-center px-[40px]">
+            <h1 class="text-white text-3xl font-bold text-center">Start Publishing<br> Your Series</h1>
+            <div class="flex gap-4 items-center mt-10 w-[600px] mx-auto">
+                <div class="flex items-center gap-2">
+                    <div class="w-10 h-10 bg-white rounded-full text-black font-bold flex items-center justify-center cursor-pointer"
+                    :class="step === 1 ? ['!bg-[#CB33AD] text-white'] : []"
+                    @click="step = 1"
+                    >1</div>
+                    <p class="text-white text-sm">Set Your Series</p>
+                </div>
+                <div class="flex-1 h-[1px] bg-gradient-to-r from-[white] to-[white/20]"></div>
+                <div class="flex items-center gap-2">
+                    <div class="w-10 h-10 bg-white rounded-full text-black font-bold flex items-center justify-center cursor-pointer"
+                    :class="step === 2 ? ['!bg-[#CB33AD] text-white'] : []"
+                    @click="step = 2"
+                    >2</div>
+                    <p class="text-white text-sm">Upload Your First Chapter</p>
+                </div>
             </div>
-            <StepPanels>
-                <StepPanel :value="1" class="rounded-lg" style="background: transparent !important">
-                    <Form v-slot="$form" :resolver="resolver" :initialValues="initialValues" @submit="onFormSubmit">
-                        <div class="mt-8 flex gap-6">
-                            <div class="flex-1 bg-black/40 rounded-lg p-6">
-                                <div class="flex flex-col gap-4">
-                                    <div class="flex flex-col gap-1">
-                                        <label class="text-white">Card Thumbnail (Square)</label>
-                                        <p class="text-sm text-slate-400 mb-8">Image that will be shown as the main
-                                            image for
-                                            the this series. With resolution 1080x1080</p>
-                                        <FileUpload class="mx-auto" name="squareThumbnail" accept="image/*"
-                                            :maxFileSize="1000000" @select="handleSquareThumbnailSelect"
-                                            @remove="removeSquareThumbnail" :customUpload="true" :auto="true"
-                                            :showUploadButton="false" :showCancelButton="false"
-                                            chooseLabel="Select Image"
-                                            invalidFileSizeMessage="File size must be less than 1MB">
-                                            <template #empty>
-                                                <div class="flex flex-col items-center gap-2">
-                                                    <i class="pi pi-upload text-2xl"></i>
-                                                    <p>Drag & drop or click to upload</p>
-                                                    <p class="text-sm text-gray-400">Recommended size: 1080x1080</p>
-                                                </div>
-                                            </template>
-                                            <template #content="{ files }">
-                                                <div v-if="squareThumbnailUrl" class="flex flex-col items-center gap-2">
-                                                    <img :src="squareThumbnailUrl" alt="Square Thumbnail Preview"
-                                                        class="w-[200px] h-[200px] object-cover rounded-lg" />
-                                                </div>
-                                            </template>
-                                        </FileUpload>
-                                        <Message v-if="$form.squareThumbnail?.invalid" severity="error" size="small"
-                                            variant="simple">
-                                            {{ $form.squareThumbnail.error?.message }}
-                                        </Message>
-                                    </div>
-
-                                    <div class="flex flex-col gap-1 mt-10">
-                                        <label class="text-white">Card Thumbnail (Landscape)</label>
-                                        <p class="text-sm text-slate-400 mb-8">
-                                            Image that will be shown as the main image for the this series. With
-                                            resolution 2040x1080
-                                        </p>
-                                        <FileUpload class="mx-auto" name="landscapeThumbnail" accept="image/*"
-                                            :maxFileSize="1000000" @select="handleLandscapeThumbnailSelect"
-                                            @remove="removeLandscapeThumbnail" :customUpload="true" :auto="true"
-                                            :showUploadButton="false" :showCancelButton="false"
-                                            chooseLabel="Select Image"
-                                            invalidFileSizeMessage="File size must be less than 1MB">
-                                            <template #empty>
-                                                <div class="flex flex-col items-center gap-2">
-                                                    <i class="pi pi-upload text-2xl"></i>
-                                                    <p>Drag & drop or click to upload</p>
-                                                    <p class="text-sm text-gray-400">Recommended size: 2040x1080</p>
-                                                </div>
-                                            </template>
-                                            <template #content="{ files }">
-                                                <div v-if="landscapeThumbnailUrl"
-                                                    class="flex flex-col items-center gap-2">
-                                                    <img :src="landscapeThumbnailUrl" alt="Landscape Thumbnail Preview"
-                                                        class="w-[300px] h-[157px] object-cover rounded-lg" />
-                                                </div>
-                                            </template>
-                                        </FileUpload>
-                                        <Message v-if="$form.landscapeThumbnail?.invalid" severity="error" size="small"
-                                            variant="simple">
-                                            {{ $form.landscapeThumbnail.error?.message }}
-                                        </Message>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="flex-2 bg-black/40 rounded-lg p-6">
-                                <div class="flex flex-col gap-6">
-                                    <!-- Series Title -->
-                                    <div class="flex flex-col gap-1">
-                                        <label for="title" class="text-white">Series Title</label>
-                                        <InputText name="title" type="text" placeholder="Enter your series title"
-                                            class="w-full" />
-                                        <Message v-if="$form.title?.invalid" severity="error" size="small"
-                                            variant="simple">
-                                            {{ $form.title.error?.message }}
-                                        </Message>
-                                    </div>
-
-                                    <div class="flex gap-4">
-
-                                        <!-- Theme/Category -->
-                                        <div class="flex flex-1 flex-col gap-1">
-                                            <label for="category" class="text-white">Theme/Category</label>
-                                            <Dropdown name="category" :options="categories" optionLabel="name"
-                                                placeholder="Select a category" class="w-full" />
-                                            <Message v-if="$form.category?.invalid" severity="error" size="small"
-                                                variant="simple">
-                                                {{ $form.category.error?.message }}
-                                            </Message>
+        </div>
+        <div v-if="step === 1" class="rounded-lg" style="background: transparent !important">
+            <Form v-slot="$form" :resolver="resolver" :initialValues="initialValues" @submit="onFormSubmit">
+                <div class="mt-8 flex gap-6">
+                    <div class="flex-1 bg-black/40 rounded-lg p-6">
+                        <div class="flex flex-col gap-4">
+                            <div class="flex flex-col gap-1">
+                                <label class="text-white">Card Thumbnail (Square)</label>
+                                <p class="text-sm text-slate-400 mb-8">Image that will be shown as the main
+                                    image for
+                                    the this series. With resolution 1080x1080</p>
+                                <FileUpload class="mx-auto" name="squareThumbnail" accept="image/*"
+                                    :maxFileSize="1000000" @select="handleSquareThumbnailSelect"
+                                    @remove="removeSquareThumbnail" :customUpload="true" :auto="true"
+                                    :showUploadButton="false" :showCancelButton="false" chooseLabel="Select Image"
+                                    invalidFileSizeMessage="File size must be less than 1MB">
+                                    <template #empty>
+                                        <div class="flex flex-col items-center gap-2">
+                                            <i class="pi pi-upload text-2xl"></i>
+                                            <p>Drag & drop or click to upload</p>
+                                            <p class="text-sm text-gray-400">Recommended size: 1080x1080</p>
                                         </div>
+                                    </template>
+                                    <template #content="{ files }">
+                                        <div v-if="squareThumbnailUrl" class="flex flex-col items-center gap-2">
+                                            <img :src="squareThumbnailUrl" alt="Square Thumbnail Preview"
+                                                class="w-[200px] h-[200px] object-cover rounded-lg" />
+                                        </div>
+                                    </template>
+                                </FileUpload>
+                                <Message v-if="$form.squareThumbnail?.invalid" severity="error" size="small"
+                                    variant="simple">
+                                    {{ $form.squareThumbnail.error?.message }}
+                                </Message>
+                            </div>
 
-                                        <!-- Historical Period -->
-                                        <!-- <div class="flex flex-1 flex-col gap-1">
+                            <div class="flex flex-col gap-1 mt-10">
+                                <label class="text-white">Card Thumbnail (Landscape)</label>
+                                <p class="text-sm text-slate-400 mb-8">
+                                    Image that will be shown as the main image for the this series. With
+                                    resolution 2040x1080
+                                </p>
+                                <FileUpload class="mx-auto" name="landscapeThumbnail" accept="image/*"
+                                    :maxFileSize="1000000" @select="handleLandscapeThumbnailSelect"
+                                    @remove="removeLandscapeThumbnail" :customUpload="true" :auto="true"
+                                    :showUploadButton="false" :showCancelButton="false" chooseLabel="Select Image"
+                                    invalidFileSizeMessage="File size must be less than 1MB">
+                                    <template #empty>
+                                        <div class="flex flex-col items-center gap-2">
+                                            <i class="pi pi-upload text-2xl"></i>
+                                            <p>Drag & drop or click to upload</p>
+                                            <p class="text-sm text-gray-400">Recommended size: 2040x1080</p>
+                                        </div>
+                                    </template>
+                                    <template #content="{ files }">
+                                        <div v-if="landscapeThumbnailUrl" class="flex flex-col items-center gap-2">
+                                            <img :src="landscapeThumbnailUrl" alt="Landscape Thumbnail Preview"
+                                                class="w-[300px] h-[157px] object-cover rounded-lg" />
+                                        </div>
+                                    </template>
+                                </FileUpload>
+                                <Message v-if="$form.landscapeThumbnail?.invalid" severity="error" size="small"
+                                    variant="simple">
+                                    {{ $form.landscapeThumbnail.error?.message }}
+                                </Message>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex-2 bg-black/40 rounded-lg p-6">
+                        <div class="flex flex-col gap-6">
+                            <!-- Series Title -->
+                            <div class="flex flex-col gap-1">
+                                <label for="title" class="text-white">Series Title</label>
+                                <InputText name="title" type="text" placeholder="Enter your series title"
+                                    class="w-full" />
+                                <Message v-if="$form.title?.invalid" severity="error" size="small" variant="simple">
+                                    {{ $form.title.error?.message }}
+                                </Message>
+                            </div>
+
+                            <div class="flex gap-4">
+
+                                <!-- Theme/Category -->
+                                <div class="flex flex-1 flex-col gap-1">
+                                    <label for="category" class="text-white">Theme/Category</label>
+                                    <Dropdown name="category" :options="categories" optionLabel="name"
+                                        placeholder="Select a category" class="w-full" />
+                                    <Message v-if="$form.category?.invalid" severity="error" size="small"
+                                        variant="simple">
+                                        {{ $form.category.error?.message }}
+                                    </Message>
+                                </div>
+
+                                <!-- Historical Period -->
+                                <!-- <div class="flex flex-1 flex-col gap-1">
                                             <label for="period" class="text-white">Historical Periodic Time</label>
                                             <div class="flex gap-4">
                                                 <InputText name="period" type="text" placeholder="--"
@@ -121,322 +128,316 @@
                                             </Message>
                                         </div> -->
 
-                                    </div>
-                                    <!-- Synopsis -->
-                                    <div class="flex flex-col gap-1">
-                                        <label for="synopsis" class="text-white">Synopsis</label>
-                                        <Textarea name="synopsis" placeholder="Write a brief description of your series"
-                                            class="w-full h-[200px]" />
-                                        <Message v-if="$form.synopsis?.invalid" severity="error" size="small"
-                                            variant="simple">
-                                            {{ $form.synopsis.error?.message }}
-                                        </Message>
-                                    </div>
+                            </div>
+                            <!-- Synopsis -->
+                            <div class="flex flex-col gap-1">
+                                <label for="synopsis" class="text-white">Synopsis</label>
+                                <Textarea name="synopsis" placeholder="Write a brief description of your series"
+                                    class="w-full h-[200px]" />
+                                <Message v-if="$form.synopsis?.invalid" severity="error" size="small" variant="simple">
+                                    {{ $form.synopsis.error?.message }}
+                                </Message>
+                            </div>
 
-                                    <div class="">
-                                        <label for="nft" class="text-white">Choose an NFT for This Series</label>
-                                        <p class="text-sm text-slate-400 mb-4">
-                                            Select a special NFT to unlock exclusive benefits for readers who own it.
-                                        </p>
-                                        <div v-if="listedNfts.length === 0"
-                                            class="bg-[#322D3E] p-[28px] border border-dashed rounded-lg text-center flex flex-col gap-4 items-center">
-                                            <img src="/public/icons/x.svg" alt="x" class="w-16" />
-                                            <p class="font-bold">No NFT Selected</p>
-                                            <p class="mt-2">You can create an NFT for this chapter to offer
-                                                exclusive benefits<br>
-                                                to readers who own it.</p>
-                                            <Button severity="secondary" @click="handleCreateNFT">Create
-                                                NFT</Button>
-                                        </div>
-                                        <div v-else class="grid grid-cols-12 gap-4">
-                                            <div v-for="(nft, i) in listedNfts" :key="i"
-                                                class="col-span-6 rounded-lg mt-5"
-                                                :class="selectedNft === nft.candyMachineAddress ? ['bg-gradient-to-b from-[#6435E9] to-[#381E83]'] : []">
-                                                <img :src="nft.image" alt="NFT Image"
-                                                    :class="selectedNft === nft.candyMachineAddress ? ['bg-gradient-to-b from-[#6435E9] to-[#381E83]'] : []"
-                                                    class="w-full h-[250px] mx-auto rounded-lg object-cover object-center
+                            <div class="">
+                                <label for="nft" class="text-white">Choose an NFT for This Series</label>
+                                <p class="text-sm text-slate-400 mb-4">
+                                    Select a special NFT to unlock exclusive benefits for readers who own it.
+                                </p>
+                                <div v-if="listedNfts.length === 0"
+                                    class="bg-[#322D3E] p-[28px] border border-dashed rounded-lg text-center flex flex-col gap-4 items-center">
+                                    <img src="/public/icons/x.svg" alt="x" class="w-16" />
+                                    <p class="font-bold">No NFT Selected</p>
+                                    <p class="mt-2">You can create an NFT for this chapter to offer
+                                        exclusive benefits<br>
+                                        to readers who own it.</p>
+                                    <Button severity="secondary" @click="handleCreateNFT">Create
+                                        NFT</Button>
+                                </div>
+                                <div v-else class="grid grid-cols-12 gap-4">
+                                    <div v-for="(nft, i) in listedNfts" :key="i" class="col-span-6 rounded-lg mt-5"
+                                        :class="selectedNft === nft.candyMachineAddress ? ['bg-gradient-to-b from-[#6435E9] to-[#381E83]'] : []">
+                                        <img :src="nft.image" alt="NFT Image"
+                                            :class="selectedNft === nft.candyMachineAddress ? ['bg-gradient-to-b from-[#6435E9] to-[#381E83]'] : []"
+                                            class="w-full h-[250px] mx-auto rounded-lg object-cover object-center
                                                 z-10 relative">
-                                                <div class="relative p-4">
-                                                    <div class="mt-5">
-                                                        <h1 class="text-lg">{{ nft.name }}</h1>
-                                                        <div class="flex gap-4 py-4 justify-between items-center">
-                                                            <div class="flex gap-2 items-center">
-                                                                <img src="/public/icons/solana.svg" alt="solana">
-                                                                <p class="text-slate-400">{{ nft.price ?
-                                                                    nft.price.toLocaleString(undefined, {
-                                                                        maximumFractionDigits: 3
-                                                                    }) : '-' }} SOL</p>
-                                                            </div>
-                                                            <div class="flex gap-2 items-center">
-                                                                <i class="pi pi-user"></i>
-                                                                <p class="text-slate-400">{{ nft.itemsRemaining || 0
-                                                                }}/{{ nft.itemsAvailable || 0
-                                                                    }}</p>
-                                                            </div>
-                                                        </div>
-                                                        <div class="pt-4 mt-6 border-t border-white">
-                                                            <div class="flex items-center justify-between">
-                                                                <p class="text-slate-400">a story from</p>
-                                                                <div class="flex gap-2 items-center">
-                                                                    <img :src="nft.creatorAvatar" alt="avatar"
-                                                                        class="w-6 h-6 rounded-full">
-                                                                    <p class="text-slate-400">{{ nft.creatorName }}</p>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                        <Button class="w-full mt-4"
-                                                            :severity="selectedNft === nft.candyMachineAddress ? 'secondary' : 'primary'"
-                                                            :loading="nft.isMinting"
-                                                            :disabled="!nft.itemsRemaining || nft.isMinting || !wallet.connected.value"
-                                                            @click="handleSelect(nft, i)">
-                                                            {{ getMintButtonText(nft) }}
-                                                        </Button>
+                                        <div class="relative p-4">
+                                            <div class="mt-5">
+                                                <h1 class="text-lg">{{ nft.name }}</h1>
+                                                <div class="flex gap-4 py-4 justify-between items-center">
+                                                    <div class="flex gap-2 items-center">
+                                                        <img src="/public/icons/solana.svg" alt="solana">
+                                                        <p class="text-slate-400">{{ nft.price ?
+                                                            nft.price.toLocaleString(undefined, {
+                                                                maximumFractionDigits: 3
+                                                            }) : '-' }} SOL</p>
                                                     </div>
+                                                    <div class="flex gap-2 items-center">
+                                                        <i class="pi pi-user"></i>
+                                                        <p class="text-slate-400">{{ nft.itemsRemaining || 0
+                                                        }}/{{ nft.itemsAvailable || 0
+                                                            }}</p>
+                                                    </div>
+                                                </div>
+                                                <div class="pt-4 mt-6 border-t border-white">
+                                                    <div class="flex items-center justify-between">
+                                                        <p class="text-slate-400">a story from</p>
+                                                        <div class="flex gap-2 items-center">
+                                                            <img :src="nft.creatorAvatar" alt="avatar"
+                                                                class="w-6 h-6 rounded-full">
+                                                            <p class="text-slate-400">{{ nft.creatorName }}</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <Button class="w-full mt-4"
+                                                    :severity="selectedNft === nft.candyMachineAddress ? 'secondary' : 'primary'"
+                                                    :loading="nft.isMinting"
+                                                    :disabled="!nft.itemsRemaining || nft.isMinting || !wallet.connected.value"
+                                                    @click="handleSelect(nft, i)">
+                                                    {{ getMintButtonText(nft) }}
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <p class="mt-4 text-white">Select Exclusive Perks for NFT Owners</p>
+                                <p class="text-slate-400 mt-2">Select the perks that you want to offer to NFT
+                                    owners
+                                </p>
+                            </div>
+                            <div class="form-group checkbox-group flex flex-col gap-4">
+                                <label class="form-label checkbox-label">
+                                    <input type="checkbox" v-model="OptionsNft.isGovernanceTokenGated"
+                                        class="form-checkbox" />
+                                    Gated by Governance Token
+                                </label>
+                                <label class="form-label checkbox-label">
+                                    <input type="checkbox" v-model="OptionsNft.isEarlyAccessTokenGated"
+                                        class="form-checkbox" />
+                                    Gated by Early Access Token/NFT
+                                </label>
+                                <label class="form-label checkbox-label">
+                                    <input type="checkbox" v-model="OptionsNft.isRealWorldAssetGated"
+                                        class="form-checkbox" />
+                                    Gated by Real World Asset (RWA)
+                                </label>
+                            </div>
+                            <Button type="submit" label="Continue" class="mt-4" />
+                        </div>
+                    </div>
+                </div>
+            </Form>
+        </div>
+        <div v-if="step === 2" class="rounded-lg" style="background: transparent !important">
+            <Form v-slot="$form" :resolver="resolverChapter" :initialValues="initialValuesChapter"
+                @submit="onFormSubmitChapter">
+                <div class="mt-8 flex gap-6">
+                    <div class="flex-1 bg-black/40 rounded-lg p-6">
+                        <div class="flex flex-col gap-4">
+                            <div class="flex flex-col gap-1">
+                                <label class="text-white">Card Thumbnail (Square)</label>
+                                <p class="text-sm text-slate-400 mb-8">Image that will be shown as the main
+                                    image for
+                                    the this series. With resolution 1080x1080</p>
+                                <FileUpload class="mx-auto" name="squareThumbnail" accept="image/*"
+                                    :maxFileSize="1000000" @select="handleSquareThumbnailSelect"
+                                    @remove="removeSquareThumbnail" :customUpload="true" :auto="true"
+                                    :showUploadButton="false" :showCancelButton="false" chooseLabel="Select Image"
+                                    invalidFileSizeMessage="File size must be less than 1MB">
+                                    <template #empty>
+                                        <div class="flex flex-col items-center gap-2">
+                                            <i class="pi pi-upload text-2xl"></i>
+                                            <p>Drag & drop or click to upload</p>
+                                            <p class="text-sm text-gray-400">Recommended size: 1080x1080</p>
+                                        </div>
+                                    </template>
+                                    <template #content="{ files }">
+                                        <div v-if="squareThumbnailUrl" class="flex flex-col items-center gap-2">
+                                            <img :src="squareThumbnailUrl" alt="Square Thumbnail Preview"
+                                                class="w-[200px] h-[200px] object-cover rounded-lg" />
+                                        </div>
+                                    </template>
+                                </FileUpload>
+                                <Message v-if="$form.squareThumbnail?.invalid" severity="error" size="small"
+                                    variant="simple">
+                                    {{ $form.squareThumbnail.error?.message }}
+                                </Message>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex-2">
+                        <div class="bg-black/40 rounded-lg p-6">
+                            <div class="flex flex-col gap-6">
+                                <!-- Chapter Title -->
+                                <div class="flex flex-col gap-1">
+                                    <label for="chapterTitle" class="text-white">Chapter Title</label>
+                                    <InputText name="chapterTitle" type="text" placeholder="Enter your chapter title"
+                                        class="w-full" />
+                                    <Message v-if="$form.chapterTitle?.invalid" severity="error" size="small"
+                                        variant="simple">
+                                        {{ $form.chapterTitle.error?.message }}
+                                    </Message>
+                                </div>
+
+                                <!-- Chapter Images -->
+                                <div class="flex flex-col gap-1">
+                                    <label class="text-white">Chapter Images</label>
+                                    <p class="text-sm text-slate-400 mb-4">
+                                        Upload up to 24 images for your chapter. Images will be displayed in the
+                                        order they are
+                                        uploaded.
+                                    </p>
+                                    <FileUpload class="mx-auto" name="chapterImages" accept="image/*"
+                                        :maxFileSize="1000000" :multiple="true" :maxFiles="24"
+                                        @select="handleChapterImagesSelect" @remove="removeChapterImage"
+                                        :customUpload="true" :auto="true" :showUploadButton="false"
+                                        :showCancelButton="false" chooseLabel="Select Images"
+                                        invalidFileSizeMessage="File size must be less than 1MB">
+                                        <template #empty>
+                                            <div class="flex flex-col items-center gap-2">
+                                                <i class="pi pi-upload text-2xl"></i>
+                                                <p>Drag & drop or click to upload</p>
+                                                <p class="text-sm text-gray-400">Maximum 24 images</p>
+                                            </div>
+                                        </template>
+                                        <template #content="{ files }">
+                                            <div v-if="chapterImages.length > 0" class="grid grid-cols-4 gap-4">
+                                                <div v-for="(image, index) in chapterImages" :key="index"
+                                                    class="relative">
+                                                    <img :src="image.preview" alt="Chapter Image Preview"
+                                                        class="w-full h-[150px] object-cover rounded-lg" />
+                                                    <Button icon="pi pi-times" severity="danger"
+                                                        class="absolute top-2 right-2 p-button-rounded p-button-sm"
+                                                        @click="removeChapterImage(index)" />
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </FileUpload>
+                                    <Message v-if="$form.chapterImages?.invalid" severity="error" size="small"
+                                        variant="simple">
+                                        {{ $form.chapterImages.error?.message }}
+                                    </Message>
+                                </div>
+
+                                <!-- Creator Notes -->
+                                <div class="flex flex-col gap-1">
+                                    <label for="creatorNotes" class="text-white">Creator Notes</label>
+                                    <Textarea name="creatorNotes"
+                                        placeholder="Add any notes or comments about this chapter"
+                                        class="w-full h-[150px]" />
+                                    <Message v-if="$form.creatorNotes?.invalid" severity="error" size="small"
+                                        variant="simple">
+                                        {{ $form.creatorNotes.error?.message }}
+                                    </Message>
+                                </div>
+
+                                <!-- NFT Selection -->
+                                <div class="flex flex-col gap-1">
+                                    <label class="text-white">NFT Selection</label>
+                                    <p class="text-sm text-slate-400 mb-4">
+                                        Choose an NFT to associate with this chapter (optional)
+                                    </p>
+                                    <div v-if="listedNfts.length === 0"
+                                        class="bg-[#322D3E] p-[28px] border border-dashed rounded-lg text-center flex flex-col gap-4 items-center">
+                                        <img src="/public/icons/x.svg" alt="x" class="w-16" />
+                                        <p class="font-bold">No NFT Selected</p>
+                                        <p class="mt-2">You can create an NFT for this chapter to offer
+                                            exclusive benefits<br>
+                                            to readers who own it.</p>
+                                        <Button severity="secondary" @click="handleCreateNFT">Create
+                                            NFT</Button>
+                                    </div>
+                                    <div v-else class="grid grid-cols-12 gap-4">
+                                        <div v-for="(nft, i) in listedNfts" :key="i" class="col-span-6 rounded-lg mt-5"
+                                            :class="selectedNft === nft.candyMachineAddress ? ['bg-gradient-to-b from-[#6435E9] to-[#381E83]'] : []">
+                                            <img :src="nft.image" alt="NFT Image"
+                                                class="w-full h-[250px] mx-auto rounded-lg object-cover object-center z-10 relative"
+                                                >
+                                            <div class="relative p-4">
+                                                <div class="mt-5">
+                                                    <h1 class="text-lg">{{ nft.name }}</h1>
+                                                    <div class="flex gap-4 py-4 justify-between items-center">
+                                                        <div class="flex gap-2 items-center">
+                                                            <img src="/public/icons/solana.svg" alt="solana" w->
+                                                            <p class="text-slate-400">{{ nft.price ?
+                                                                nft.price.toLocaleString(undefined, {
+                                                                    maximumFractionDigits: 3
+                                                                }) : '-' }} SOL</p>
+                                                        </div>
+                                                        <div class="flex gap-2 items-center">
+                                                            <i class="pi pi-user"></i>
+                                                            <p class="text-slate-400">{{ nft.itemsRemaining || 0
+                                                            }}/{{
+                                                                    nft.itemsAvailable || 0 }}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div class="pt-4 mt-6 border-t border-white">
+                                                        <div class="flex items-center justify-between">
+                                                            <p class="text-slate-400">a story from</p>
+                                                            <div class="flex gap-2 items-center">
+                                                                <img :src="nft.creatorAvatar" alt="avatar"
+                                                                    class="w-6 h-6 rounded-full">
+                                                                <p class="text-slate-400">{{ nft.creatorName }}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <Button class="w-full mt-4"
+                                                        :severity="selectedNft === nft.candyMachineAddress ? 'secondary' : 'primary'"
+                                                        :loading="nft.isMinting"
+                                                        :disabled="!nft.itemsRemaining || nft.isMinting || !wallet.connected.value"
+                                                        @click="handleSelect(nft, i)">
+                                                        {{ getMintButtonText(nft) }}
+                                                    </Button>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
-                                    <div>
-                                        <p class="mt-4 text-white">Select Exclusive Perks for NFT Owners</p>
-                                        <p class="text-slate-400 mt-2">Select the perks that you want to offer to NFT
-                                            owners
-                                        </p>
-                                    </div>
-                                    <div class="form-group checkbox-group flex flex-col gap-4">
-                                        <label class="form-label checkbox-label">
-                                            <input type="checkbox" v-model="OptionsNft.isGovernanceTokenGated"
-                                                class="form-checkbox" />
-                                            Gated by Governance Token
-                                        </label>
-                                        <label class="form-label checkbox-label">
-                                            <input type="checkbox" v-model="OptionsNft.isEarlyAccessTokenGated"
-                                                class="form-checkbox" />
-                                            Gated by Early Access Token/NFT
-                                        </label>
-                                        <label class="form-label checkbox-label">
-                                            <input type="checkbox" v-model="OptionsNft.isRealWorldAssetGated"
-                                                class="form-checkbox" />
-                                            Gated by Real World Asset (RWA)
-                                        </label>
-                                    </div>
-                                    <Button type="submit" label="Continue" class="mt-4" />
                                 </div>
-                            </div>
-                        </div>
-                    </Form>
-                </StepPanel>
-                <StepPanel :value="2" class="rounded-lg" style="background: transparent !important">
-                    <Form v-slot="$form" :resolver="resolverChapter" :initialValues="initialValuesChapter"
-                        @submit="onFormSubmitChapter">
-                        <div class="mt-8 flex gap-6">
-                            <div class="flex-1 bg-black/40 rounded-lg p-6">
+
+                                <!-- Publishing Options -->
                                 <div class="flex flex-col gap-4">
-                                    <div class="flex flex-col gap-1">
-                                        <label class="text-white">Card Thumbnail (Square)</label>
-                                        <p class="text-sm text-slate-400 mb-8">Image that will be shown as the main
-                                            image for
-                                            the this series. With resolution 1080x1080</p>
-                                        <FileUpload class="mx-auto" name="squareThumbnail" accept="image/*"
-                                            :maxFileSize="1000000" @select="handleSquareThumbnailSelect"
-                                            @remove="removeSquareThumbnail" :customUpload="true" :auto="true"
-                                            :showUploadButton="false" :showCancelButton="false"
-                                            chooseLabel="Select Image"
-                                            invalidFileSizeMessage="File size must be less than 1MB">
-                                            <template #empty>
-                                                <div class="flex flex-col items-center gap-2">
-                                                    <i class="pi pi-upload text-2xl"></i>
-                                                    <p>Drag & drop or click to upload</p>
-                                                    <p class="text-sm text-gray-400">Recommended size: 1080x1080</p>
+                                    <div class="flex gap-[50px]">
+                                        <div class="flex-1">
+                                            <p class="text-white">Do You Want to Publish Now?</p>
+                                            <p class="text-slate-400">You can publish now or scheduled publish
+                                            </p>
+                                        </div>
+                                        <div class="flex-1">
+                                            <div class="flex flex-col gap-4">
+                                                <div class="flex items-center gap-2">
+                                                    <RadioButton v-model="publishOption" name="publishOption"
+                                                        value="now" />
+                                                    <label class="text-white">Publish Now</label>
                                                 </div>
-                                            </template>
-                                            <template #content="{ files }">
-                                                <div v-if="squareThumbnailUrl" class="flex flex-col items-center gap-2">
-                                                    <img :src="squareThumbnailUrl" alt="Square Thumbnail Preview"
-                                                        class="w-[200px] h-[200px] object-cover rounded-lg" />
+                                                <div class="flex items-center gap-2">
+                                                    <RadioButton v-model="publishOption" name="publishOption"
+                                                        value="schedule" />
+                                                    <label class="text-white">Schedule for Later</label>
                                                 </div>
-                                            </template>
-                                        </FileUpload>
-                                        <Message v-if="$form.squareThumbnail?.invalid" severity="error" size="small"
-                                            variant="simple">
-                                            {{ $form.squareThumbnail.error?.message }}
-                                        </Message>
+                                                <div v-if="publishOption === 'schedule'" class="flex flex-col gap-2">
+                                                    <DatePicker name="publishDate" v-model="publishDate"
+                                                        :showTime="true" :showSeconds="false" :minDate="new Date()"
+                                                        placeholder="Select Schedule Date" />
+                                                    <Message v-if="$form.publishDate?.invalid" severity="error"
+                                                        size="small" variant="simple">
+                                                        {{ $form.publishDate.error?.message }}
+                                                    </Message>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                            <div class="flex-2">
-                                <div class="bg-black/40 rounded-lg p-6">
-                                    <div class="flex flex-col gap-6">
-                                        <!-- Chapter Title -->
-                                        <div class="flex flex-col gap-1">
-                                            <label for="chapterTitle" class="text-white">Chapter Title</label>
-                                            <InputText name="chapterTitle" type="text"
-                                                placeholder="Enter your chapter title" class="w-full" />
-                                            <Message v-if="$form.chapterTitle?.invalid" severity="error" size="small"
-                                                variant="simple">
-                                                {{ $form.chapterTitle.error?.message }}
-                                            </Message>
-                                        </div>
 
-                                        <!-- Chapter Images -->
-                                        <div class="flex flex-col gap-1">
-                                            <label class="text-white">Chapter Images</label>
-                                            <p class="text-sm text-slate-400 mb-4">
-                                                Upload up to 24 images for your chapter. Images will be displayed in the
-                                                order they are
-                                                uploaded.
-                                            </p>
-                                            <FileUpload class="mx-auto" name="chapterImages" accept="image/*"
-                                                :maxFileSize="1000000" :multiple="true" :maxFiles="24"
-                                                @select="handleChapterImagesSelect" @remove="removeChapterImage"
-                                                :customUpload="true" :auto="true" :showUploadButton="false"
-                                                :showCancelButton="false" chooseLabel="Select Images"
-                                                invalidFileSizeMessage="File size must be less than 1MB">
-                                                <template #empty>
-                                                    <div class="flex flex-col items-center gap-2">
-                                                        <i class="pi pi-upload text-2xl"></i>
-                                                        <p>Drag & drop or click to upload</p>
-                                                        <p class="text-sm text-gray-400">Maximum 24 images</p>
-                                                    </div>
-                                                </template>
-                                                <template #content="{ files }">
-                                                    <div v-if="chapterImages.length > 0" class="grid grid-cols-4 gap-4">
-                                                        <div v-for="(image, index) in chapterImages" :key="index"
-                                                            class="relative">
-                                                            <img :src="image.preview" alt="Chapter Image Preview"
-                                                                class="w-full h-[150px] object-cover rounded-lg" />
-                                                            <Button icon="pi pi-times" severity="danger"
-                                                                class="absolute top-2 right-2 p-button-rounded p-button-sm"
-                                                                @click="removeChapterImage(index)" />
-                                                        </div>
-                                                    </div>
-                                                </template>
-                                            </FileUpload>
-                                            <Message v-if="$form.chapterImages?.invalid" severity="error" size="small"
-                                                variant="simple">
-                                                {{ $form.chapterImages.error?.message }}
-                                            </Message>
-                                        </div>
-
-                                        <!-- Creator Notes -->
-                                        <div class="flex flex-col gap-1">
-                                            <label for="creatorNotes" class="text-white">Creator Notes</label>
-                                            <Textarea name="creatorNotes"
-                                                placeholder="Add any notes or comments about this chapter"
-                                                class="w-full h-[150px]" />
-                                            <Message v-if="$form.creatorNotes?.invalid" severity="error" size="small"
-                                                variant="simple">
-                                                {{ $form.creatorNotes.error?.message }}
-                                            </Message>
-                                        </div>
-
-                                        <!-- NFT Selection -->
-                                        <div class="flex flex-col gap-1">
-                                            <label class="text-white">NFT Selection</label>
-                                            <p class="text-sm text-slate-400 mb-4">
-                                                Choose an NFT to associate with this chapter (optional)
-                                            </p>
-                                            <div v-if="listedNfts.length === 0"
-                                                class="bg-[#322D3E] p-[28px] border border-dashed rounded-lg text-center flex flex-col gap-4 items-center">
-                                                <img src="/public/icons/x.svg" alt="x" class="w-16" />
-                                                <p class="font-bold">No NFT Selected</p>
-                                                <p class="mt-2">You can create an NFT for this chapter to offer
-                                                    exclusive benefits<br>
-                                                    to readers who own it.</p>
-                                                <Button severity="secondary" @click="handleCreateNFT">Create
-                                                    NFT</Button>
-                                            </div>
-                                            <div v-else class="grid grid-cols-12 gap-4">
-                                                <div v-for="(nft, i) in listedNfts" :key="i"
-                                                    class="col-span-6 rounded-lg mt-5" :class="{}">
-                                                    <img :src="nft.image" alt="NFT Image"
-                                                        class="w-full h-[250px] mx-auto rounded-lg object-cover object-center z-10 relative">
-                                                    <div class="relative p-4">
-                                                        <div class="mt-5">
-                                                            <h1 class="text-lg">{{ nft.name }}</h1>
-                                                            <div class="flex gap-4 py-4 justify-between items-center">
-                                                                <div class="flex gap-2 items-center">
-                                                                    <img src="/public/icons/solana.svg" alt="solana" w->
-                                                                    <p class="text-slate-400">{{ nft.price ?
-                                                                        nft.price.toLocaleString(undefined, {
-                                                                            maximumFractionDigits: 3
-                                                                        }) : '-' }} SOL</p>
-                                                                </div>
-                                                                <div class="flex gap-2 items-center">
-                                                                    <i class="pi pi-user"></i>
-                                                                    <p class="text-slate-400">{{ nft.itemsRemaining || 0
-                                                                    }}/{{
-                                                                            nft.itemsAvailable || 0 }}</p>
-                                                                </div>
-                                                            </div>
-                                                            <div class="pt-4 mt-6 border-t border-white">
-                                                                <div class="flex items-center justify-between">
-                                                                    <p class="text-slate-400">a story from</p>
-                                                                    <div class="flex gap-2 items-center">
-                                                                        <img :src="nft.creatorAvatar" alt="avatar"
-                                                                            class="w-6 h-6 rounded-full">
-                                                                        <p class="text-slate-400">{{ nft.creatorName }}
-                                                                        </p>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                            <Button class="w-full mt-4"
-                                                                :severity="selectedNft === nft.candyMachineAddress ? 'secondary' : 'primary'"
-                                                                :loading="nft.isMinting"
-                                                                :disabled="!nft.itemsRemaining || nft.isMinting || !wallet.connected.value"
-                                                                @click="handleSelect(nft, i)">
-                                                                {{ getMintButtonText(nft) }}
-                                                            </Button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- Publishing Options -->
-                                        <div class="flex flex-col gap-4">
-                                            <div class="flex gap-[50px]">
-                                                <div class="flex-1">
-                                                    <p class="text-white">Do You Want to Publish Now?</p>
-                                                    <p class="text-slate-400">You can publish now or scheduled publish
-                                                    </p>
-                                                </div>
-                                                <div class="flex-1">
-                                                    <div class="flex flex-col gap-4">
-                                                        <div class="flex items-center gap-2">
-                                                            <RadioButton v-model="publishOption" name="publishOption"
-                                                                value="now" />
-                                                            <label class="text-white">Publish Now</label>
-                                                        </div>
-                                                        <div class="flex items-center gap-2">
-                                                            <RadioButton v-model="publishOption" name="publishOption"
-                                                                value="schedule" />
-                                                            <label class="text-white">Schedule for Later</label>
-                                                        </div>
-                                                        <div v-if="publishOption === 'schedule'"
-                                                            class="flex flex-col gap-2">
-                                                            <DatePicker name="publishDate" v-model="publishDate"
-                                                                :showTime="true" :showSeconds="false"
-                                                                :minDate="new Date()"
-                                                                placeholder="Select Schedule Date" />
-                                                            <Message v-if="$form.publishDate?.invalid" severity="error"
-                                                                size="small" variant="simple">
-                                                                {{ $form.publishDate.error?.message }}
-                                                            </Message>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <Button type="submit" label="Publish Chapter" class="mt-4" />
-                                    </div>
-                                </div>
+                                <Button type="submit" label="Publish Chapter" class="mt-4" />
                             </div>
                         </div>
-                    </Form>
-                </StepPanel>
-            </StepPanels>
-        </Stepper>
+                    </div>
+                </div>
+            </Form>
+        </div>
     </div>
 
     <!-- Confirmation Modal -->
@@ -458,11 +459,6 @@
 </template>
 
 <script setup>
-import Stepper from 'primevue/stepper';
-import StepList from 'primevue/stepList';
-import Step from 'primevue/step';
-import StepPanels from 'primevue/stepPanels';
-import StepPanel from 'primevue/stepPanel';
 import { ref } from 'vue';
 import { Form } from '@primevue/forms';
 import { zodResolver } from '@primevue/forms/resolvers/zod';
@@ -535,6 +531,9 @@ const toast = useToast();
 const listedNfts = ref([]);
 const appUser = ref(null);
 const selectedNft = ref(null)
+watch(step, (newStep) => {
+    selectedNft.value = null
+})
 const taleId = ref(null)
 const imageSet = ref(null)
 
@@ -938,7 +937,7 @@ async function handleSaveTale(states) {
 
 const onFormSubmit = ({ valid, values }) => {
     if (valid) {
-        
+
         handleSaveTale(values)
     }
 };
