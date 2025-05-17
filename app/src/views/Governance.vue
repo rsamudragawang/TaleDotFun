@@ -149,7 +149,7 @@ async function fetchUserByAddress(address) {
   if (!address) return null;
   if (userCache.value[address]) return userCache.value[address];
   try {
-    const res = await fetch(`${AUTH_API_BASE_URL}/users/address/${address}`);
+    const res = await fetch(`${AUTH_API_BASE_URL}/wallet/address/${address}`);
     if (!res.ok) throw new Error('Not found');
     const { data } = await res.json();
     userCache.value[address] = { name: data.name, avatar: data.avatar };

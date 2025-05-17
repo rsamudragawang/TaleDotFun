@@ -121,15 +121,15 @@ export default {
             <router-link :to="{ name: 'Home' }" class="nav-link" active-class="nav-link-active">
               Discovery
             </router-link>
-            <router-link :to="{ name: 'Tales' }" class="nav-link" active-class="nav-link-active">
+            <router-link :to="{ name: 'CreateSeries' }" class="nav-link" active-class="nav-link-active">
               Tales
             </router-link>
             <router-link :to="{ name: 'Governance' }" class="nav-link" active-class="nav-link-active">
               Governance
             </router-link>
-            <router-link :to="{ name: 'MintGeneral' }" class="nav-link" active-class="nav-link-active">
+            <!-- <router-link :to="{ name: 'MintGeneral' }" class="nav-link" active-class="nav-link-active">
               Mint NFT
-            </router-link>
+            </router-link> -->
             <router-link :to="{ name: 'LaunchNFT' }" class="nav-link" active-class="nav-link-active">
               Launch NFT
             </router-link>

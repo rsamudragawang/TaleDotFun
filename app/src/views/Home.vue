@@ -59,7 +59,13 @@
         <TabPanels :pt="{ 'root': '!bg-transparent !border-color-transparent' }">
           <TabPanel header="Featured" :value="0">
             <div class="grid grid-cols-12 gap-4 mt-8">
-              <div class="col-span-12 md:col-span-6 lg:col-span-3" v-for="tale in featuredTales" :key="tale.publicKey.toString()">
+              <div 
+                class="col-span-12 md:col-span-6 lg:col-span-3"
+                v-for="tale in featuredTales" 
+                :key="tale.publicKey.toString()"
+                @click="goToSeriesDetail(tale.account.taleId)"
+                style="cursor: pointer;"
+              >
                 <div class="rounded-lg p-4 bg-gradient-to-b from-[#372754] to-[#2a1d40]">
                   <div class="bg-[#43B4CA] rounded-lg p-8 relative">
                     <img src="/public/icons/grid.svg" alt="" class="absolute top-[4%] right-[8%] w-[85%] z-0">
@@ -610,7 +616,7 @@ async function fetchListedNftsWithMetadata() {
         let creatorName = item.account.creatorWallet.toString().substring(0,6) + "...";
         let creatorAvatar = `https://ui-avatars.com/api/?rounded=true&bold=true&name=${encodeURIComponent(item.account.creatorWallet.toString().substring(0,2))}`;
         try {
-          const res = await axios.get(`${AUTH_API_BASE_URL}/users/address/${item.account.creatorWallet.toString()}`);
+          const res = await axios.get(`${AUTH_API_BASE_URL}/wallet/address/${item.account.creatorWallet.toString()}`);
           if (res.data && res.data.data) {
             creatorName = res.data.data.name || item.account.creatorWallet.toString();
             creatorAvatar = res.data.data.avatar || `https://ui-avatars.com/api/?rounded=true&bold=true&name=${encodeURIComponent(creatorName)}`;
@@ -682,7 +688,7 @@ async function fetchFeaturedTales() {
       tale.likeCount = tale.account.likeCount || 0;
       // Author info
       try {
-        const res = await fetch(`${AUTH_API_BASE_URL}/users/address/${tale.account.author.toBase58()}`);
+        const res = await fetch(`${AUTH_API_BASE_URL}/wallet/address/${tale.account.author.toBase58()}`);
         if (res.ok) {
           const { data } = await res.json();
           tale._authorName = data.name;
@@ -780,6 +786,10 @@ const trendingAuthorsToShow = computed(() => {
   }
   return result.slice(0, 3);
 });
+
+const goToSeriesDetail = (id) => {
+  router.push(`/detail-series/${id}`);
+};
 
 </script>
 

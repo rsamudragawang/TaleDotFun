@@ -152,7 +152,7 @@ exports.updateUserAvatar = async (req, res, next) => {
 };
 
 // @desc    Get a user by wallet address
-// @route   GET /api/users/address/:walletAddress
+// @route   GET /api/wallet/address/:walletAddress
 // @access  Public
 exports.getUserByWalletAddress = async (req, res, next) => {
   try {

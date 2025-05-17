@@ -144,7 +144,7 @@
                                 <p class="text-sm text-slate-400 mb-4">
                                     Select a special NFT to unlock exclusive benefits for readers who own it.
                                 </p>
-                                <div v-if="listedNfts.length === 0"
+                                <div v-if="userNfts.length === 0"
                                     class="bg-[#322D3E] p-[28px] border border-dashed rounded-lg text-center flex flex-col gap-4 items-center">
                                     <img src="/public/icons/x.svg" alt="x" class="w-16" />
                                     <p class="font-bold">No NFT Selected</p>
@@ -155,7 +155,7 @@
                                         NFT</Button>
                                 </div>
                                 <div v-else class="grid grid-cols-12 gap-4">
-                                    <div v-for="(nft, i) in listedNfts" :key="i" class="col-span-6 rounded-lg mt-5"
+                                    <div v-for="(nft, i) in userNfts" :key="i" class="col-span-6 rounded-lg mt-5"
                                         :class="selectedNft === nft.candyMachineAddress ? ['bg-gradient-to-b from-[#6435E9] to-[#381E83]'] : []">
                                         <img :src="nft.image" alt="NFT Image"
                                             :class="selectedNft === nft.candyMachineAddress ? ['bg-gradient-to-b from-[#6435E9] to-[#381E83]'] : []"
@@ -339,7 +339,7 @@
                                     <p class="text-sm text-slate-400 mb-4">
                                         Choose an NFT to associate with this chapter (optional)
                                     </p>
-                                    <div v-if="listedNfts.length === 0"
+                                    <div v-if="userNfts.length === 0"
                                         class="bg-[#322D3E] p-[28px] border border-dashed rounded-lg text-center flex flex-col gap-4 items-center">
                                         <img src="/public/icons/x.svg" alt="x" class="w-16" />
                                         <p class="font-bold">No NFT Selected</p>
@@ -350,7 +350,7 @@
                                             NFT</Button>
                                     </div>
                                     <div v-else class="grid grid-cols-12 gap-4">
-                                        <div v-for="(nft, i) in listedNfts" :key="i" class="col-span-6 rounded-lg mt-5"
+                                        <div v-for="(nft, i) in userNfts" :key="i" class="col-span-6 rounded-lg mt-5"
                                             :class="selectedNft === nft.candyMachineAddress ? ['bg-gradient-to-b from-[#6435E9] to-[#381E83]'] : []">
                                             <img :src="nft.image" alt="NFT Image"
                                                 class="w-full h-[250px] mx-auto rounded-lg object-cover object-center z-10 relative"
@@ -459,7 +459,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { Form } from '@primevue/forms';
 import { zodResolver } from '@primevue/forms/resolvers/zod';
 import { z } from 'zod';
@@ -474,7 +474,7 @@ import DatePicker from 'primevue/datepicker';
 import RadioButton from 'primevue/radiobutton';
 import Toast from 'primevue/toast';
 import { useToast } from 'primevue';
-import { onMounted, computed, watch } from 'vue';
+import { onMounted, watch } from 'vue';
 import { useWallet, WalletMultiButton } from 'solana-wallets-vue';
 import { Connection, PublicKey, SystemProgram } from '@solana/web3.js';
 import { Program, AnchorProvider } from '@coral-xyz/anchor';
@@ -680,6 +680,7 @@ async function fetchListedNftsWithMetadata() {
                 let itemsMinted = null;
                 let itemsRemaining = null;
                 let metadata = null;
+                let creatorWallet = undefined;
 
                 try {
                     cmData = await fetchCandyMachine(umi, umiPublicKey(item.account.candyMachineAddress.toString()));
@@ -718,6 +719,10 @@ async function fetchListedNftsWithMetadata() {
                             console.warn(`Failed to fetch metadata from ${cmData.items[0].uri}`, fetchErr);
                         }
                     }
+
+                    if (cmData && cmData.data && Array.isArray(cmData.data.creators) && cmData.data.creators.length > 0) {
+                        creatorWallet = cmData.data.creators[0].address;
+                    }
                 } catch (cmErr) {
                     console.warn(`Failed to fetch candy machine ${item.account.candyMachineAddress.toString()}`, cmErr);
                 }
@@ -725,7 +730,7 @@ async function fetchListedNftsWithMetadata() {
                 let creatorName = item.account.creatorWallet.toString().substring(0, 6) + "...";
                 let creatorAvatar = `https://ui-avatars.com/api/?rounded=true&bold=true&name=${encodeURIComponent(item.account.creatorWallet.toString().substring(0, 2))}`;
                 try {
-                    const res = await axios.get(`${AUTH_API_BASE_URL}/users/address/${item.account.creatorWallet.toString()}`);
+                    const res = await axios.get(`${AUTH_API_BASE_URL}/wallet/address/${item.account.creatorWallet.toString()}`);
                     if (res.data && res.data.data) {
                         creatorName = res.data.data.name || item.account.creatorWallet.toString();
                         creatorAvatar = res.data.data.avatar || `https://ui-avatars.com/api/?rounded=true&bold=true&name=${encodeURIComponent(creatorName)}`;
@@ -744,7 +749,8 @@ async function fetchListedNftsWithMetadata() {
                     creatorName,
                     creatorAvatar,
                     candyMachineAddress: item.account.candyMachineAddress.toString(),
-                    isMinting: false
+                    isMinting: false,
+                    creatorWallet,
                 };
             })
         );
@@ -876,8 +882,6 @@ async function handleSaveTale(states) {
             })
             .rpc();
         // showUiMessage("On-chain tale created!", "success", txSignature);
-        taleId.value = taleAccountPda
-        showConfirmationModal.value = true;
         // if (currentTaleForm.value.editingExistingOnChainTale) {
         //   // showUiMessage("Updating on-chain tale...", "loading", null, 0);
         //   const taleAccountPda = (await PublicKey.findProgramAddress(
@@ -1204,4 +1208,15 @@ async function handleSaveEpisode(states) {
         // if (uiMessage.value.type === 'loading') showUiMessage("","info");
     }
 }
+
+// Filter listedNfts to only those owned by the logged-in user
+const userNfts = computed(() => {
+  if (!wallet.connected.value || !wallet.publicKey.value) return [];
+  const userAddress = wallet.publicKey.value.toBase58();
+  console.log('WALLET ADDRESS:', userAddress);
+  console.log('LISTED NFTS:', listedNfts.value);
+  const filtered = listedNfts.value.filter(nft => nft.creatorWallet === userAddress || nft.account?.creatorWallet?.toBase58?.() === userAddress);
+  console.log('USER NFTS:', filtered);
+  return filtered;
+});
 </script>

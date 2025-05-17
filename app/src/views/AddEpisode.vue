@@ -8,7 +8,7 @@
             <p class="text-sm text-slate-400 mb-8">Image that will be shown as the main
               image for
               the this series. With resolution 1080x1080</p>
-            <FileUpload class="mx-auto" name="squareThumbnail" accept="image/*" :maxFileSize="1000000"
+            <FileUpload class="mx-auto" name="squareThumbnail" accept="image/*"
               @select="handleSquareThumbnailSelect" @remove="removeSquareThumbnail" :customUpload="true" :auto="true"
               :showUploadButton="false" :showCancelButton="false" chooseLabel="Select Image"
               invalidFileSizeMessage="File size must be less than 1MB">
@@ -96,52 +96,62 @@
               <p class="text-sm text-slate-400 mb-4">
                 Choose an NFT to associate with this chapter (optional)
               </p>
-              <div v-if="listedNfts.length === 0"
-                class="bg-[#322D3E] p-[28px] border border-dashed rounded-lg text-center flex flex-col gap-4 items-center">
-                <img src="/public/icons/x.svg" alt="x" class="w-16" />
-                <p class="font-bold">No NFT Selected</p>
-                <p class="mt-2">You can create an NFT for this chapter to offer
-                  exclusive benefits<br>
-                  to readers who own it.</p>
-                <Button severity="secondary" @click="handleCreateNFT">Create
-                  NFT</Button>
-              </div>
-              <div v-else>
-                <div v-for="(nft, i) in listedNfts" :key="i" class="col-span-3 rounded-lg mt-5"
-                  style="background-color: rgba(0, 0, 0, 0.5);">
-                  <img :src="nft.image" alt="NFT Image" style="height:400px;width:100%;height:auto;object-fit:cover;">
-                  <div class="relative p-4">
-                    <div class="mt-5">
-                      <h1 class="text-lg">{{ nft.name }}</h1>
-                      <div class="flex gap-4 py-4 justify-between items-center">
-                        <div class="flex gap-2 items-center">
-                          <img src="/public/icons/solana.svg" alt="solana" w->
-                          <p class="text-slate-400">{{ nft.price ? nft.price.toLocaleString(undefined, {
-                            maximumFractionDigits: 3 }) : '-' }} SOL</p>
-                        </div>
-                        <div class="flex gap-2 items-center">
-                          <i class="pi pi-user"></i>
-                          <p class="text-slate-400">{{ nft.itemsRemaining || 0 }}/{{ nft.itemsAvailable || 0 }}</p>
-                        </div>
-                      </div>
-                      <div class="pt-4 mt-6 border-t border-white">
-                        <div class="flex items-center justify-between">
-                          <p class="text-slate-400">a story from</p>
-                          <div class="flex gap-2 items-center">
-                            <img :src="nft.creatorAvatar" alt="avatar" class="w-6 h-6 rounded-full">
-                            <p class="text-slate-400">{{ nft.creatorName }}</p>
-                          </div>
-                        </div>
-                      </div>
-                      <Button class="w-full mt-4" severity="secondary" :loading="nft.isMinting"
-                        :disabled="!nft.itemsRemaining || nft.isMinting || !wallet.connected.value"
-                        @click="handleSelect(nft, i)">
-                        {{ getMintButtonText(nft) }}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <div v-if="userNfts.length === 0"
+                                        class="bg-[#322D3E] p-[28px] border border-dashed rounded-lg text-center flex flex-col gap-4 items-center">
+                                        <img src="/public/icons/x.svg" alt="x" class="w-16" />
+                                        <p class="font-bold">No NFT Selected</p>
+                                        <p class="mt-2">You can create an NFT for this chapter to offer
+                                            exclusive benefits<br>
+                                            to readers who own it.</p>
+                                        <Button severity="secondary" @click="handleCreateNFT">Create
+                                            NFT</Button>
+                                    </div>
+                                    <div v-else class="grid grid-cols-12 gap-4">
+                                        <div v-for="(nft, i) in userNfts" :key="i" class="col-span-6 rounded-lg mt-5"
+                                            :class="selectedNft === nft.candyMachineAddress ? ['bg-gradient-to-b from-[#6435E9] to-[#381E83]'] : []">
+                                            <img :src="nft.image" alt="NFT Image"
+                                                class="w-full h-[250px] mx-auto rounded-lg object-cover object-center z-10 relative"
+                                                >
+                                            <div class="relative p-4">
+                                                <div class="mt-5">
+                                                    <h1 class="text-lg">{{ nft.name }}</h1>
+                                                    <div class="flex gap-4 py-4 justify-between items-center">
+                                                        <div class="flex gap-2 items-center">
+                                                            <img src="/public/icons/solana.svg" alt="solana" w->
+                                                            <p class="text-slate-400">{{ nft.price ?
+                                                                nft.price.toLocaleString(undefined, {
+                                                                    maximumFractionDigits: 3
+                                                                }) : '-' }} SOL</p>
+                                                        </div>
+                                                        <div class="flex gap-2 items-center">
+                                                            <i class="pi pi-user"></i>
+                                                            <p class="text-slate-400">{{ nft.itemsRemaining || 0
+                                                            }}/{{
+                                                                    nft.itemsAvailable || 0 }}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div class="pt-4 mt-6 border-t border-white">
+                                                        <div class="flex items-center justify-between">
+                                                            <p class="text-slate-400">a story from</p>
+                                                            <div class="flex gap-2 items-center">
+                                                                <img :src="nft.creatorAvatar" alt="avatar"
+                                                                    class="w-6 h-6 rounded-full">
+                                                                <p class="text-slate-400">{{ nft.creatorName }}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <Button class="w-full mt-4"
+                                                        :severity="selectedNft === nft.candyMachineAddress ? 'secondary' : 'primary'"
+                                                        :loading="nft.isMinting"
+                                                        :disabled="!nft.itemsRemaining || nft.isMinting || !wallet.connected.value"
+                                                        @click="handleSelect(nft, i)">
+                                                        {{ getMintButtonText(nft) }}
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
             </div>
 
             <!-- Publishing Options -->
@@ -182,7 +192,7 @@
   </Form>
 </template>
 <script setup>
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { Form } from '@primevue/forms';
 import { zodResolver } from '@primevue/forms/resolvers/zod';
 import { z } from 'zod';
@@ -197,7 +207,7 @@ import DatePicker from 'primevue/datepicker';
 import RadioButton from 'primevue/radiobutton';
 import Toast from 'primevue/toast';
 import { useToast } from 'primevue';
-import { onMounted, computed, watch } from 'vue';
+import { onMounted, watch } from 'vue';
 import { useWallet, WalletMultiButton } from 'solana-wallets-vue';
 import { Connection, PublicKey, SystemProgram } from '@solana/web3.js';
 import { Program, AnchorProvider } from '@coral-xyz/anchor';
@@ -275,10 +285,15 @@ const OptionsNft = ({
 })
 
 function getMintButtonText(nft) {
-    if (!wallet.connected.value) return 'Connect Wallet to Mint';
-    if (!nft.itemsRemaining) return 'Sold Out';
-    if (nft.isMinting) return 'Minting...';
-    return 'Select';
+
+if (!wallet.connected.value) return 'Connect Wallet to Mint';
+if (!nft.itemsRemaining) return 'Sold Out';
+if (nft.isMinting) return 'Minting...';
+if (selectedNft.value === nft.candyMachineAddress) {
+    return 'Unselect NFTs'
+}
+return 'Select';
+
 }
 
 const initialValues = ref({
@@ -391,6 +406,7 @@ async function fetchListedNftsWithMetadata() {
                 let itemsMinted = null;
                 let itemsRemaining = null;
                 let metadata = null;
+                let creatorWallet = undefined;
 
                 try {
                     cmData = await fetchCandyMachine(umi, umiPublicKey(item.account.candyMachineAddress.toString()));
@@ -429,6 +445,14 @@ async function fetchListedNftsWithMetadata() {
                             console.warn(`Failed to fetch metadata from ${cmData.items[0].uri}`, fetchErr);
                         }
                     }
+
+                    try {
+                        if (cmData && cmData.data && Array.isArray(cmData.data.creators) && cmData.data.creators.length > 0) {
+                            creatorWallet = cmData.data.creators[0].address;
+                        }
+                    } catch (e) {
+                        creatorWallet = undefined;
+                    }
                 } catch (cmErr) {
                     console.warn(`Failed to fetch candy machine ${item.account.candyMachineAddress.toString()}`, cmErr);
                 }
@@ -436,7 +460,7 @@ async function fetchListedNftsWithMetadata() {
                 let creatorName = item.account.creatorWallet.toString().substring(0, 6) + "...";
                 let creatorAvatar = `https://ui-avatars.com/api/?rounded=true&bold=true&name=${encodeURIComponent(item.account.creatorWallet.toString().substring(0, 2))}`;
                 try {
-                    const res = await axios.get(`${AUTH_API_BASE_URL}/users/address/${item.account.creatorWallet.toString()}`);
+                    const res = await axios.get(`${AUTH_API_BASE_URL}/wallet/address/${item.account.creatorWallet.toString()}`);
                     if (res.data && res.data.data) {
                         creatorName = res.data.data.name || item.account.creatorWallet.toString();
                         creatorAvatar = res.data.data.avatar || `https://ui-avatars.com/api/?rounded=true&bold=true&name=${encodeURIComponent(creatorName)}`;
@@ -455,7 +479,8 @@ async function fetchListedNftsWithMetadata() {
                     creatorName,
                     creatorAvatar,
                     candyMachineAddress: item.account.candyMachineAddress.toString(),
-                    isMinting: false
+                    isMinting: false,
+                    creatorWallet,
                 };
             })
         );
@@ -587,7 +612,6 @@ async function handleSaveTale(states) {
             })
             .rpc();
         // showUiMessage("On-chain tale created!", "success", txSignature);
-        taleId.value = taleAccountPda
         // if (currentTaleForm.value.editingExistingOnChainTale) {
         //   // showUiMessage("Updating on-chain tale...", "loading", null, 0);
         //   const taleAccountPda = (await PublicKey.findProgramAddress(
@@ -914,4 +938,10 @@ async function handleSaveEpisode(states) {
         // if (uiMessage.value.type === 'loading') showUiMessage("","info");
     }
 }
+
+const userNfts = computed(() => {
+    if (!wallet.connected.value || !wallet.publicKey.value) return [];
+    const userAddress = wallet.publicKey.value.toBase58();
+    return listedNfts.value.filter(nft => nft.creatorWallet === userAddress);
+});
 </script>

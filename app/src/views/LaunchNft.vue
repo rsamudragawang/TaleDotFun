@@ -278,7 +278,7 @@ async function fetchListedNftsWithMetadata() {
                 let creatorName = item.account.creatorWallet.toString().substring(0,6) + "...";
                 let creatorAvatar = `https://ui-avatars.com/api/?rounded=true&bold=true&name=${encodeURIComponent(item.account.creatorWallet.toString().substring(0,2))}`;
                 try {
-                    const res = await axios.get(`${AUTH_API_BASE_URL}/users/address/${item.account.creatorWallet.toString()}`);
+                    const res = await axios.get(`${AUTH_API_BASE_URL}/wallet/address/${item.account.creatorWallet.toString()}`);
                     if (res.data && res.data.data) {
                         creatorName = res.data.data.name || item.account.creatorWallet.toString();
                         creatorAvatar = res.data.data.avatar || `https://ui-avatars.com/api/?rounded=true&bold=true&name=${encodeURIComponent(creatorName)}`;
