@@ -128,6 +128,12 @@ TaleDotFun/
 
 ---
 
+## Created by TaleDotFun Team
+- Alfara Nafi Dinara (Developer)
+- Nisrina Thifal Khairunnisa (UI/UX Designer)
+- Ramadhani Samudera Gawang Indiyanto (Developer)
+- Anzalla Dzikri Dhamara (Developer)
+
 ## 📄 License
 
 This project is licensed under the [MIT License](LICENSE).
