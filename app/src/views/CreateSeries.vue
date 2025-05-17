@@ -859,6 +859,7 @@ async function handleSaveTale(states) {
             .rpc();
         // showUiMessage("On-chain tale created!", "success", txSignature);
         taleId.value = taleAccountPda
+        showConfirmationModal.value = true;
         // if (currentTaleForm.value.editingExistingOnChainTale) {
         //   // showUiMessage("Updating on-chain tale...", "loading", null, 0);
         //   const taleAccountPda = (await PublicKey.findProgramAddress(
@@ -918,7 +919,7 @@ async function handleSaveTale(states) {
 
 const onFormSubmit = ({ valid, values }) => {
     if (valid) {
-        showConfirmationModal.value = true;
+        
         handleSaveTale(values)
     }
 };
