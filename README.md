@@ -119,13 +119,6 @@ TaleDotFun/
 ├── INSTALLATION.md
 └── ...
 ```
-
----
-
-## 🙏 Credits
-- Built by [Your Name Here]
-- Inspired by the Solana, Metaplex, and DAO communities
-
 ---
 
 ## Created by TaleDotFun Team
@@ -133,6 +126,7 @@ TaleDotFun/
 - Nisrina Thifal Khairunnisa (UI/UX Designer)
 - Ramadhani Samudera Gawang Indiyanto (Developer)
 - Anzalla Dzikri Dhamara (Developer)
+- Inspired by the Solana, Metaplex, and DAO communities
 
 ## 📄 License
 
