@@ -188,7 +188,7 @@ const appUser = ref(null);
 const isLoadingAppUser = ref(false);
 const userMintActivities = ref([]); // Assuming this is fetched in fetchAppUser
 // const isLoadingUserMints = ref(false); // If fetched separately
-
+console.log(taleOnChainPdaString)
 const fetchedIpfsFullContent = ref('');
 const ipfsFullContentLoading = ref(false);
 const ipfsFullContentError = ref('');

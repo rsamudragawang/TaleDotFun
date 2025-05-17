@@ -210,10 +210,8 @@
     </div>
   </div>
 </template> -->
-<template>
-  <!-- Chapter Lists and NFTs Collection -->
+<!-- <template>
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
-    <!-- Chapter Lists -->
     <div class="lg:col-span-2">
       <div class="flex items-center gap-3 mb-4">
         <h2 class="text-xl font-bold">Chapter Lists</h2>
@@ -223,7 +221,6 @@
       <div class="space-y-4">
         
         <div v-for="episode in combinedEpisodes" :key="episode.onChainPda" class="episode-item">
-          <!-- More chapters (showing just 4 for brevity) -->
           <div class="bg-gray-900/30 backdrop-blur-sm rounded-lg p-3 flex items-center">
             <img 
               v-if="episode.thumbnailCid" :src="`https://gateway.pinata.cloud/ipfs/${episode.thumbnailCid}`"
@@ -252,7 +249,6 @@
       </div>
     </div>
 
-    <!-- NFTs Collection -->
     <div>
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-xl font-bold">NFTs Collection</h2>
@@ -294,6 +290,74 @@
       </div>
     </div>
   </div>
+</template> -->
+<template>
+  <div class="mt-[50px]">
+            <div class="flex gap-4">
+                <div class="flex-3">
+                    <div class="flex items-center gap-8">
+                        <h1 class="text-white text-2xl font-bold">Chapter Lists</h1>
+                        <div class="bg-[#BB3FDA]/20 py-1 px-2 text-white rounded-full text-sm border border-slate-400">{{ combinedEpisodes.length }}
+                            Chapter
+                        </div>
+                    </div>
+                    <div class="mt-6 rounded-lg bg-gradient-to-r from-[#372754] to-[#2a1d40/50] p-4 border border-white/5"
+                    v-for="episode in combinedEpisodes" :key="episode.onChainPda">
+                        <div class="flex items-center gap-2 justify-between">
+                            <div class="flex items-center gap-4">
+                                <img v-if="episode.thumbnailCid" :src="`https://gateway.pinata.cloud/ipfs/${episode.thumbnailCid}`" alt="comic"
+                                    class="w-[64px] h-[64px] object-cover rounded-lg">
+                                <div>
+                                    <div class="flex items-center gap-8">
+                                        <div
+                                            class="bg-[#BB3FDA] py-1 px-2 text-white rounded-full text-sm border border-white">
+                                            Chapter {{episode.order !== undefined ? episode.order : 'N/A'}}</div>
+                                        <div class="flex items-center gap-2">
+                                            <i class="pi pi-calendar"></i>
+                                            <p class="text-white/40 text-sm">{{ new Date(parseInt(episode.rawOnChainData.timestamp) * 1000).toLocaleString() }}</p>
+                                        </div>
+                                    </div>
+                                    <h1 class="text-white text-lg font-bold mt-2">{{ episode.name }}</h1>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-4">
+                                <div class="px-4 py-1 bg-white/5 rounded-full font-medium">{{ episode.likeCount }} Like</div>
+                                <img src="/public/icons/checklist.svg" alt="checklist" class="w-6 h-6">
+                            </div>
+     
+                        </div>
+                    </div>
+                </div>
+                <div class="flex-2">
+                  <div v-if="isAuthorOfParentTale" class="add-episode-button-container">
+                    <button @click="redirectToEpisode()" class="btn btn-primary">
+                      + Add New Episode
+                    </button>
+                  </div>
+                    <h1 class="text-white text-2xl font-bold">NFTs Collection</h1>
+                    <div
+                        class="mt-6 rounded-lg bg-gradient-to-r from-[#372754] to-[#2a1d40/20] p-4 flex items-center gap-8 justify-between border border-white/5">
+                        <p class="text-slate-400 text-sm">Total</p>
+                        <div class="w-[50%] h-[2px] bg-slate-400/5 rounded-full"></div>
+                        <div class="flex items-center gap-2">
+                            <img src="/public/icons/nft.svg" alt="nft" class="w-6 h-6">
+                            <p class="text-white text-sm">{{ listedNfts?.length }} NFTs</p>
+                        </div>
+                    </div>
+                    <div  class="bg-[#1F1F1F] rounded-lg p-4 mt-8">
+                        <div class="relative">
+                            <img :src="listedNfts?.[showedNftIndex]?.image" class="w-full">
+                            <div class="absolute bottom-4 right-4 text-white text-lg p-4 bg-black/80 rounded-lg">
+                                {{ listedNfts?.[showedNftIndex]?.name }}
+                            </div>
+                        </div>
+                        
+                        <Button @click="handleMint(listedNfts?.[showedNftIndex], showedNftIndex)" label="Mint Now" class="w-full mt-4" />
+                    </div>
+                </div>
+            </div>
+
+        </div>
 </template>
 
 <script setup>
@@ -305,10 +369,30 @@ import { Connection, PublicKey, SystemProgram } from '@solana/web3.js';
 import { Program, AnchorProvider, BN, utils } from '@coral-xyz/anchor'; // Added BN and utils
 import { Buffer } from 'buffer';
 import { v4 as uuidv4 } from 'uuid';
+import Button from 'primevue/button';
 
 import CandyMachineCreator from './CandyMachineCreator.vue';
 import { uploadFileToIPFS, uploadTextToIPFS } from '../services/pinataService';
+import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
+import { 
+    mplCandyMachine, 
+    fetchCandyMachine,
+    mintV2,
+    fetchCandyGuard
+} from '@metaplex-foundation/mpl-candy-machine';
+import { 
+    generateSigner,
+    transactionBuilder,
+    publicKey as umiPublicKey,
+    some as umiSome,
+    // sol as umiSol // Not directly used for solPayment value construction here
+} from '@metaplex-foundation/umi';
+import { walletAdapterIdentity } from '@metaplex-foundation/umi-signer-wallet-adapters';
+import { setComputeUnitLimit } from '@metaplex-foundation/mpl-toolbox';
+import { useRouter } from 'vue-router';
 
+// For Vue Router
+const router = useRouter();
 const props = defineProps({
   parentTale: {
     type: Object,
@@ -318,7 +402,8 @@ const props = defineProps({
   appUser: { type: Object, default: null },
   userMintActivities: { type: Array, default: () => [] }
 });
-
+const listedNfts = ref([]);
+const showedNftIndex = ref(0)
 // --- Configuration ---
 const API_BASE_URL = import.meta.env.VITE_APP_AUTH_API_URL || 'http://localhost:3000/api';
 const JWT_TOKEN_KEY = 'readium_fun_jwt_token';
@@ -349,7 +434,6 @@ const isUploadingImagesModal = ref(false);
 const isUploadingEpisodeThumbnail = ref(false); // New state
 const isLikingEpisode = ref({}); // To track liking status per episode: { [pdaString]: boolean }
 
-
 const defaultEpisodeForm = () => ({
   editingExistingOnChainEpisode: false,
   episodeOnChainPdaToEdit: null,
@@ -379,6 +463,8 @@ const uiMessage = ref({ text: '', type: 'info', transactionSignature: null });
 // --- Computed Properties ---
 const isAuthorOfParentTale = computed(() => props.appUser && props.parentTale?.onChainAccountData?.author?.toString() === props.appUser.walletAddress);
 
+
+
 const combinedEpisodes = computed(() => {
   return fetchedOnChainEpisodes.value.map(ocEpisode => {
     const episodePdaString = ocEpisode.publicKey.toString();
@@ -406,6 +492,247 @@ const combinedEpisodes = computed(() => {
     };
   }).sort((a, b) => a.order - b.order);
 });
+
+function redirectToEpisode (){
+  router.push({name:'AddEpisode', param:{ id: 'testing'}})
+}
+async function handleMint(nft, index) {
+    if (!wallet.connected.value || !wallet.publicKey.value) {
+        alert('Please connect your wallet to mint');
+        return;
+    }
+
+    if (!nft.itemsRemaining) {
+        alert('This NFT collection is sold out');
+        return;
+    }
+
+    listedNfts.value[index].isMinting = true;
+
+    try {
+        const umi = createUmi(SOLANA_RPC_URL)
+            .use(walletAdapterIdentity(wallet.wallet.value.adapter))
+            .use(mplCandyMachine());
+
+        const candyMachine = await fetchCandyMachine(
+            umi,
+            umiPublicKey(nft.candyMachineAddress)
+        );
+
+        const candyGuard = await fetchCandyGuard(
+            umi,
+            candyMachine.mintAuthority
+        );
+
+        const nftMintSigner = generateSigner(umi);
+
+        const builder = transactionBuilder()
+            .add(setComputeUnitLimit(umi, { units: 800_000 }))
+            .add(
+                mintV2(umi, {
+                    candyMachine: candyMachine.publicKey,
+                    nftMint: nftMintSigner,
+                    collectionMint: candyMachine.collectionMint,
+                    collectionUpdateAuthority: candyMachine.authority,
+                    candyGuard: candyGuard.publicKey, // candyGuard should always exist for v2 mint
+                    mintArgs: {
+                        solPayment: umiSome({ destination: candyGuard.guards.solPayment.value.destination }),
+                        // Add other guard arguments if needed, e.g., for tokenPayment, allowList, etc.
+                    },
+                })
+            );
+
+        const result = await builder.sendAndConfirm(umi, {
+            confirm: { commitment: 'confirmed' }
+        });
+
+        const nftMintWeb3 = new PublicKey(nftMintSigner.publicKey.toString());
+        const userWalletWeb3 = new PublicKey(wallet.publicKey.value.toString());
+        const candyMachineIdWeb3 = new PublicKey(candyMachine.publicKey.toString());
+
+
+        // Correct PDA derivation for mint_activity_account
+        const [mintActivityPDA, _mintActivityBump] = await PublicKey.findProgramAddress(
+        [
+            Buffer.from("mint_activity"),
+            userWalletWeb3.toBuffer(),
+            nftMintWeb3.toBuffer() // <--- Use the unique NFT mint address here
+        ],
+        TALE_NFT_PROGRAM_ID
+    );
+        
+        console.log("Derived mintActivityPDA:", mintActivityPDA.toString());
+        console.log("Using candyMachineId for PDA seed:", candyMachineIdWeb3.toString());
+        console.log("Calling logMintActivity with arguments:");
+        console.log("  candy_machine_id_arg:", candyMachineIdWeb3.toString());
+        console.log("  transaction_signature_str:", result.signature.toString()); // Ensure it's a string
+        console.log("  episode_on_chain_pda_option:", undefined);
+        console.log("Accounts for logMintActivity:");
+        console.log("  mintActivityAccount:", mintActivityPDA.toString());
+        console.log("  nftMintAddress:", nftMintWeb3.toString());
+        console.log("  userWallet:", userWalletWeb3.toString());
+
+
+        const provider = new AnchorProvider(connection, wallet.wallet.value.adapter, AnchorProvider.defaultOptions());
+        const program = new Program(taleNftIdl,  provider);
+
+
+        await program.methods
+            .logMintActivity(
+                candyMachineIdWeb3, // candy_machine_id_arg (Pubkey)
+                Buffer.from(result.signature).toString('base64'), // transaction_signature_str (String) - ensure it's correctly formatted if not already a string
+                null // episode_on_chain_pda_option (Option<Pubkey>) - null or undefined for None
+            )
+            .accounts({
+                mintActivityAccount: mintActivityPDA,
+                nftMintAddress: nftMintWeb3,
+                userWallet: userWalletWeb3,
+                systemProgram: SystemProgram.programId,
+            })
+            .rpc();
+
+        alert(`Successfully minted NFT! Transaction: ${Buffer.from(result.signature).toString('base64')}`);
+        await fetchListedNftsWithMetadata();
+
+    } catch (error) {
+        console.error('Minting error:', error);
+        let errorMessage = error.message;
+        if (error.logs) {
+            errorMessage += "\nProgram Logs:\n" + error.logs.join("\n");
+        }
+        alert(`Minting failed: ${errorMessage}`);
+    } finally {
+        listedNfts.value[index].isMinting = false;
+    }
+}
+// Watch the 'fetchedOnChainEpisodes' ref
+watch(fetchedOnChainEpisodes, (newValue, oldValue) => {
+ 
+
+  // Check if the new value is populated and is an array
+  if (newValue && Array.isArray(newValue) && newValue.length > 0) {
+    console.log('fetchedOnChainEpisodes is now populated with an array.');
+
+    // You can now safely work with newValue (which is fetchedOnChainEpisodes.value)
+    // For example, map it:
+   fetchListedNftsWithMetadata()
+    // You could assign mappedData to another ref, or use it directly
+    // const processedEpisodes = ref(mappedData);
+
+  } else if (newValue && Array.isArray(newValue) && newValue.length === 0) {
+    console.log('fetchedOnChainEpisodes is an empty array.');
+    // Handle the case where data is fetched but it's an empty list
+  } else {
+    console.log('fetchedOnChainEpisodes is not yet populated with a valid array or is undefined/null.');
+  }
+}, {
+  // Optional:
+  // deep: true, // Use if fetchedOnChainEpisodes.value is an object or array and you want to watch for nested changes.
+                // For replacing the ref's value entirely (e.g., fetchedOnChainEpisodes.value = newArray), deep is not strictly necessary.
+  // immediate: true // Set to true if you want the watcher callback to run immediately on component setup
+                   // with the initial value of fetchedOnChainEpisodes.
+});
+async function fetchListedNftsWithMetadata() {
+    try {
+        // Use a generic provider for read-only operations if wallet not needed
+        const provider = new AnchorProvider(connection, wallet.wallet?.value?.adapter || {publicKey: PublicKey.default, signTransaction: async () => {}, signAllTransactions: async () => {}}, AnchorProvider.defaultOptions());
+        const program = new Program(idlFromFileNft, provider);
+        
+        // const allListed = await program.account.listedNft.all();
+        const allListed = fetchedOnChainEpisodes.value
+        const umi = createUmi(SOLANA_RPC_URL).use(mplCandyMachine());
+        listedNfts.value = await Promise.all(
+          combinedEpisodes?.value?.filter(item => item.candyMachineId !== '')?.map(async (item) => {
+                let cmData = null;
+                let name = '';
+                let image = 'https://placehold.co/326x327'; // Default placeholder
+                let price = null;
+                let itemsAvailable = null;
+                let itemsMinted = null;
+                let itemsRemaining = null;
+                let metadata = null;
+                try {
+                    cmData = await fetchCandyMachine(umi, umiPublicKey(item.candyMachineId));
+                    console.log(cmData)
+                    if (cmData.items && cmData.items.length > 0 && cmData.items[0].name) {
+                        name = cmData.items[0].name;
+                    } else if (cmData.data.name) { // Fallback to candy machine name if item name not found
+                        name = cmData.data.name;
+                    }
+
+                    console.log("pricez", Number(cmData.header.lamports.basisPoints) / 1_000_000_000);
+                    
+
+                    // Assuming solPayment guard is present for price
+                    if (cmData.header.lamports.basisPoints) {
+                        price = Number(cmData.header.lamports.basisPoints) / 1_000_000_000;
+                    } else if (cmData.configLineSettings && cmData.configLineSettings.prefixName){ //legacy
+                        name = cmData.configLineSettings.prefixName;
+                    }
+
+
+                    itemsAvailable = Number(cmData.data.itemsAvailable);
+                    itemsMinted = Number(cmData.itemsRedeemed);
+                    itemsRemaining = itemsAvailable - itemsMinted;
+
+                    if (cmData.items && cmData.items.length > 0 && cmData.items[0].uri) {
+                        try {
+                            const response = await fetch(cmData.items[0].uri.replace(/^https?:\/\/arweave.net\//, 'https://ar-io.dev/'));
+                            if (response.ok) {
+                                metadata = await response.json();
+                                if (metadata.image) {
+                                    image = metadata.image.replace(/^https?:\/\/arweave.net\//, 'https://ar-io.dev/');
+                                }
+                            }
+                        } catch (fetchErr) {
+                            console.warn(`Failed to fetch metadata from ${cmData.items[0].uri}`, fetchErr);
+                        }
+                    }
+                } catch (cmErr) {
+                    console.warn(`Failed to fetch candy machine ${item.candyMachineId}`, cmErr);
+                }
+
+                console.log(item.author.toString(),"item")
+
+                let creatorName = item.author.toString().substring(0,6) + "...";
+                let creatorAvatar = `https://ui-avatars.com/api/?rounded=true&bold=true&name=${encodeURIComponent(item.author.toString().substring(0,2))}`;
+                try {
+                    const res = await axios.get(`${AUTH_API_BASE_URL}/users/address/${item.author.toString()}`);
+                    if (res.data && res.data.data) {
+                        creatorName = res.data.data.name || item.author.toString();
+                        creatorAvatar = res.data.data.avatar || `https://ui-avatars.com/api/?rounded=true&bold=true&name=${encodeURIComponent(creatorName)}`;
+                    }
+                } catch (axiosErr) {
+                    // Use default if fetching creator profile fails
+                }
+
+                return {
+                    name: name || 'Untitled NFT Collection',
+                    image,
+                    price,
+                    itemsAvailable,
+                    itemsMinted,
+                    itemsRemaining,
+                    creatorName,
+                    creatorAvatar,
+                    candyMachineAddress: item.candyMachineId,
+                    isMinting: false
+                };
+            })
+        );
+    } catch (e) {
+        console.error("Failed to fetch listed NFTs:", e);
+        listedNfts.value = [];
+    }
+}
+
+
+function getMintButtonText(nft) {
+    if (!wallet.connected.value) return 'Connect Wallet to Mint';
+    if (!nft.itemsRemaining) return 'Sold Out';
+    if (nft.isMinting) return 'Minting...';
+    return 'Mint & Get Special Access';
+}
 
 const isContentLockedForDisplay = (episode) => {
   if (!episode.isNft) return false;
@@ -935,6 +1262,7 @@ onMounted(() => {
   if (!wallet.connected.value) {
     showUiMessage("Please connect wallet to manage or view episodes.", "info");
   }
+  // fetchListedNftsWithMetadata();
   // Initial data fetch is primarily handled by the wallet watcher.
 });
 
