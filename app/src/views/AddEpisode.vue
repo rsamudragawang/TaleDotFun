@@ -181,7 +181,7 @@
     </div>
   </Form>
 </template>
-<script>
+<script setup>
 import { ref } from 'vue';
 import { Form } from '@primevue/forms';
 import { zodResolver } from '@primevue/forms/resolvers/zod';

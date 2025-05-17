@@ -514,7 +514,7 @@ const connection = new Connection(SOLANA_RPC_URL, "confirmed");
 let provider;
 let program;
 let programNft;
-const step = ref(2);
+const step = ref(1);
 const squareThumbnailUrl = ref(null);
 const landscapeThumbnailUrl = ref(null);
 const squareThumbnail = ref(null);
@@ -525,7 +525,7 @@ const toast = useToast();
 const listedNfts = ref([]);
 const appUser = ref(null);
 const selectedNft = ref(null)
-const taleId = ref('dc42a996-ccb2-4c95-b2c0-b8e5a9ba')
+const taleId = ref(null)
 const imageSet = ref(null)
 
 const categories = [
