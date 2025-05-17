@@ -181,42 +181,40 @@
     <div class="mt-[120px] pt-[48px] border-t border-white">
       <div class="flex items-center justify-between">
         <h1 class="text-white text-2xl">Engaging NFTs from Creator</h1>
-        <p class="text-slate-400">See all <i class="pi pi-arrow-right ml-4"></i></p>
+        <router-link to="/launch-nft" class="text-slate-400 hover:underline cursor-pointer flex items-center">
+          See all <i class="pi pi-arrow-right ml-4"></i>
+        </router-link>
       </div>
-      <Carousel :value="[1, 2, 3, 3, 4]" :numVisible="3" :numScroll="1" :responsiveOptions="responsiveOptions"
-        class="-mx-[60px] mt-[20px]">
-        <template #item="slotProps">
-          <div class="mx-2 rounded-lg" style="background-color: rgba(0, 0, 0, 0.5);">
-            <img src="/public/images/nft_chromatic.png" alt="test" class="
-            w-full">
-            <div class="relative p-4">
-              <div class="mt-5">
-                <h1 class="text-lg">Chromatic Soul</h1>
-                <div class="flex gap-4 py-4 justify-between items-center">
-                  <div class="flex gap-2 items-center">
-                    <img src="/public/icons/solana.svg" alt="solana">
-                    <p class="text-slate-400">0,876 SOL</p>
-                  </div>
-                  <div class="flex gap-2 items-center">
-                    <i class="pi pi-user"></i>
-                    <p class="text-slate-400">6.4K/10K</p>
-                  </div>
+      <div class="grid grid-cols-12 gap-[24px]">
+        <div v-for="(nft, i) in listedNfts.slice(0, 4)" :key="i" class="col-span-3 rounded-lg mt-5" style="background-color: rgba(0, 0, 0, 0.5);">
+          <img :src="nft.image" alt="NFT Image" style="height:400px;width:100%;height:auto;object-fit:cover;">
+          <div class="relative p-4">
+            <div class="mt-5">
+              <h1 class="text-lg">{{ nft.name }}</h1>
+              <div class="flex gap-4 py-4 justify-between items-center">
+                <div class="flex gap-2 items-center">
+                  <img src="/public/icons/solana.svg" alt="solana">
+                  <p class="text-slate-400">{{ nft.price ? nft.price.toLocaleString(undefined, { maximumFractionDigits: 3 }) : '-' }} SOL</p>
                 </div>
-                <div class="pt-4 mt-6 border-t border-white">
-                  <div class="flex items-center justify-between">
-                    <p class="text-slate-400">a story from</p>
-                    <div class="flex gap-2">
-                      <img src="/public/icons/odesy.svg" alt="">
-                      <p class="text-slate-400">Odesy AI</p>
-                    </div>
-                  </div>
+                <div class="flex gap-2 items-center">
+                  <i class="pi pi-user"></i>
+                  <p class="text-slate-400">{{ nft.itemsRemaining || 0 }}/{{ nft.itemsAvailable || 0 }}</p>
                 </div>
-                <Button class="w-full mt-4" severity="secondary">Mint & Get Special Access</Button>
               </div>
+              <div class="pt-4 mt-6 border-t border-white">
+                <div class="flex items-center justify-between">
+                  <p class="text-slate-400">a story from</p>
+                  <div class="flex gap-2 items-center">
+                    <img :src="nft.creatorAvatar" alt="avatar" class="w-6 h-6 rounded-full">
+                    <p class="text-slate-400">{{ nft.creatorName }}</p>
+                  </div>
+                </div>
+              </div>
+              <Button class="w-full mt-4" severity="secondary">Mint & Get Special Access</Button>
             </div>
           </div>
-        </template>
-      </Carousel>
+        </div>
+      </div>
     </div>
 
     <section class="tales-list-section hidden">
@@ -272,45 +270,6 @@
         </div>
     </section>
 
-    <section class="inspired-nfts-section" style="margin-top: 3rem;">
-      <h2 class="section-title">Get Inspired by Other Creators</h2>
-      <div v-if="isLoadingInspiredNfts" class="loading-indicator">
-        <div class="spinner"></div>
-        <p>Loading NFTs...</p>
-      </div>
-      <div v-else-if="inspiredNftsError" class="error-box">{{ inspiredNftsError }}</div>
-      <div v-else-if="inspiredNfts.length === 0" class="info-box no-tales-info">
-        No NFTs have been minted yet.
-      </div>
-      <div v-else class="inspired-nfts-grid">
-        <NFTCard
-          v-for="nft in inspiredNfts"
-          :key="nft.mint"
-          :nft="{
-            mint: nft.mint,
-            name: nft.name || 'Untitled',
-            description: nft.description || '',
-            symbol: nft.symbol || '',
-            image: nft.image || '',
-            creator: nft.creator,
-            price: nft.price || null,
-            itemsAvailable: nft.itemsAvailable,
-            itemsMinted: nft.itemsMinted,
-            itemsRemaining: nft.itemsRemaining,
-            candyMachineId: nft.candyMachineId || '',
-            sellerFeeBasisPoints: nft.sellerFeeBasisPoints || 0,
-            properties: nft.properties || {},
-            metadata: nft
-          }"
-          :showBuyButton="false"
-        >
-          <template #actions>
-            <button class="btn btn-info w-full mt-2">Mint & Get Special Access</button>
-          </template>
-        </NFTCard>
-      </div>
-    </section>
-
     <div v-if="viewingTale" class="modal-overlay">
       <div class="modal-content">
         <h2 class="modal-title">{{ viewingTale.account.title }}</h2>
@@ -362,6 +321,7 @@ import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
 import { walletAdapterIdentity } from '@metaplex-foundation/umi-signer-wallet-adapters';
 import { mplCandyMachine, fetchCandyMachine } from '@metaplex-foundation/mpl-candy-machine';
 import taleStoryIdl from '../anchor/tale_story.json';
+import { publicKey as umiPublicKey } from '@metaplex-foundation/umi';
 
 // --- Configuration ---
 const AUTH_API_BASE_URL = import.meta.env.VITE_APP_AUTH_API_URL || 'http://localhost:3000/api';
@@ -416,8 +376,8 @@ const responsiveOptions = ref([
     numScroll: 1
   }
 ]);
-const inspiredNfts = ref([]);
-const isLoadingInspiredNfts = ref(false);
+const listedNfts = ref([]);
+const isLoadingListedNfts = ref(false);
 const inspiredNftsError = ref('');
 const TALE_STORY_PROGRAM_ID = new PublicKey('6fDFNzPWHCpGfNBKJsEhxvRxaTSxvRptc9rtSQmmFQo2');
 const taleStoryProgram = ref(null);
@@ -602,113 +562,79 @@ function navigateToTaleDetailAndCloseModal(taleIdOnChain) { // taleIdOnChain is 
   router.push({ name: 'TaleDetail', params: { id: taleIdOnChain } });
 }
 
-// --- On-chain MintActivity Fetch ---
-async function fetchInspiredNftsOnChain() {
-  isLoadingInspiredNfts.value = true;
-  inspiredNftsError.value = '';
+async function fetchListedNftsWithMetadata() {
+  
   try {
-    // Use a read-only provider (no wallet needed for fetching)
-    const readOnlyProvider = new AnchorProvider(connection, wallet.wallet.value?.adapter || wallet, AnchorProvider.defaultOptions());
-    const taleStoryProgram = new Program(idl, readOnlyProvider);
-
-    // Fetch all Episode accounts on-chain
-    const episodes = await taleStoryProgram.account.episode.all();
-
-    // Only include episodes where is_nft is true
-    const nftEpisodes = episodes.filter(item => item.account.isNft);
-
-    // Prepare Umi for Candy Machine fetches
+    const provider = new AnchorProvider(connection, wallet.wallet?.value?.adapter || {publicKey: PublicKey.default, signTransaction: async () => {}, signAllTransactions: async () => {}}, AnchorProvider.defaultOptions());
+    const program = new Program(taleNftIdl, provider);
+    const allListed = await program.account.listedNft.all();
     const umi = createUmi(SOLANA_RPC_URL).use(mplCandyMachine());
-
-    // Build inspiredNfts with enriched data from Candy Machine
-    inspiredNfts.value = await Promise.all(nftEpisodes.map(async (item) => {
-      let cmData = null;
-      let name = item.account.episodeName;
-      let creator = item.account.author.toString();
-      let price = null;
-      let available = null;
-      let image = item.account.imageSetId || '';
-      let metadata = null;
-      let itemsAvailable = null;
-      let itemsMinted = null;
-      let itemsRemaining = null;
-
-      try {
-        if (item.account.candyMachineId && item.account.candyMachineId.length > 0) {
-          cmData = await fetchCandyMachine(umi, item.account.candyMachineId);
-          console.log("cmData", cmData);
-          console.log("candyMachineId", item.account.candyMachineId);
-          
-          
-          // Name: Prefer item name from CM, fallback to collection name, then episodeName
+    console.log("allListed", allListed);
+    listedNfts.value = await Promise.all(
+      allListed.map(async (item) => {
+        let cmData = null;
+        let name = '';
+        let image = 'https://placehold.co/326x327';
+        let price = null;
+        let itemsAvailable = null;
+        let itemsMinted = null;
+        let itemsRemaining = null;
+        let metadata = null;
+        try {
+          cmData = await fetchCandyMachine(umi, umiPublicKey(item.account.candyMachineAddress.toString()));
           if (cmData.items && cmData.items.length > 0 && cmData.items[0].name) {
             name = cmData.items[0].name;
-          } else if (cmData.collection && typeof cmData.collection === 'string') {
-            name = cmData.collection;
+          } else if (cmData.data.name) {
+            name = cmData.data.name;
           }
-          // Creator: Prefer authority from CM
-          if (cmData.authority) {
-            creator = cmData.authority.toString();
-          }
-          // Price: from header.lamports.basisPoints (lamports to SOL)
-          if (cmData.header && cmData.header.lamports && cmData.header.lamports.basisPoints) {
+          if (cmData.header.lamports.basisPoints) {
             price = Number(cmData.header.lamports.basisPoints) / 1_000_000_000;
+          } else if (cmData.configLineSettings && cmData.configLineSettings.prefixName){
+            name = cmData.configLineSettings.prefixName;
           }
-          // Available, Minted, Remaining: use MintComponent logic
-  
-            console.log("cmData.data", cmData.data.itemsAvailable, cmData.itemsRedeemed);
-            
-            itemsAvailable = Number(cmData.data.itemsAvailable);
-            itemsMinted = Number(cmData.itemsRedeemed);
-            itemsRemaining = itemsAvailable - itemsMinted;
-            available = itemsRemaining;
-
-            console.log("itemsAvailable", itemsAvailable, "itemsMinted", itemsMinted, "itemsRemaining", itemsRemaining, "available", available);
-            
-          // Image: Prefer items[0].uri from CM
+          itemsAvailable = Number(cmData.data.itemsAvailable);
+          itemsMinted = Number(cmData.itemsRedeemed);
+          itemsRemaining = itemsAvailable - itemsMinted;
           if (cmData.items && cmData.items.length > 0 && cmData.items[0].uri) {
-            image = cmData.items[0].uri;
-            // Fetch metadata from the URI
             try {
-              const response = await fetch(cmData.items[0].uri);
+              const response = await fetch(cmData.items[0].uri.replace(/^https?:\/\/arweave.net\//, 'https://ar-io.dev/'));
               if (response.ok) {
                 metadata = await response.json();
-                // Update image from metadata if available
                 if (metadata.image) {
-                  image = metadata.image;
+                  image = metadata.image.replace(/^https?:\/\/arweave.net\//, 'https://ar-io.dev/');
                 }
               }
-            } catch (err) {
-              console.error('Failed to fetch NFT metadata:', err);
-            }
+            } catch (fetchErr) {}
           }
+        } catch (cmErr) {}
+        let creatorName = item.account.creatorWallet.toString().substring(0,6) + "...";
+        let creatorAvatar = `https://ui-avatars.com/api/?rounded=true&bold=true&name=${encodeURIComponent(item.account.creatorWallet.toString().substring(0,2))}`;
+        try {
+          const res = await axios.get(`${AUTH_API_BASE_URL}/users/address/${item.account.creatorWallet.toString()}`);
+          if (res.data && res.data.data) {
+            creatorName = res.data.data.name || item.account.creatorWallet.toString();
+            creatorAvatar = res.data.data.avatar || `https://ui-avatars.com/api/?rounded=true&bold=true&name=${encodeURIComponent(creatorName)}`;
+          }
+        } catch (axiosErr) {
+          console.error("HomeView: Error fetching creator info:", axiosErr);
         }
-      } catch (err) {
-        console.error(`Failed to fetch Candy Machine for id ${item.account.candyMachineId}:`, err);
-      }
-
-      return {
-        mint: item.publicKey.toString(),
-        name: metadata?.name || name,
-        description: metadata?.description || '',
-        symbol: metadata?.symbol || '',
-        image: metadata?.image || image,
-        creator,
-        price,
-        available,
-        itemsAvailable,
-        itemsMinted,
-        itemsRemaining,
-        candyMachineId: item.account.candyMachineId,
-        sellerFeeBasisPoints: metadata?.seller_fee_basis_points || 0,
-        properties: metadata?.properties || {},
-        metadata // Include full metadata
-      };
-    }));
+        return {
+          name: name || 'Untitled NFT Collection',
+          image,
+          price,
+          itemsAvailable,
+          itemsMinted,
+          itemsRemaining,
+          creatorName,
+          creatorAvatar,
+          candyMachineAddress: item.account.candyMachineAddress.toString(),
+          isMinting: false
+        };
+      })
+    );
   } catch (e) {
-    inspiredNftsError.value = e.message || 'Failed to fetch Episodes from chain.';
-  } finally {
-    isLoadingInspiredNfts.value = false;
+    console.error("Failed to fetch listed NFTs:", e);
+    listedNfts.value = [];
   }
 }
 
@@ -722,7 +648,7 @@ watch(() => wallet.publicKey.value, (newVal, oldVal) => {
 onMounted(() => {
   fetchAppUser();
   fetchUser();
-  fetchInspiredNftsOnChain();
+  fetchListedNftsWithMetadata();
   fetchFeaturedTales();
   fetchTrendingAuthors();
   // fetchPublishedOnChainTales is called by the wallet watcher when program is ready
