@@ -628,7 +628,9 @@ const combinedEpisodes = computed(() => {
 });
 
 function redirectToEpisode() {
-  router.push({ name: 'AddEpisode', param: { id: 'testing' } })
+  console.log(props.parentTale.onChainPdaString)
+
+  router.push({ name: 'AddEpisode', params: { id: props.parentTale.onChainPdaString } })
 }
 async function handleMint(nft, index) {
   if (!wallet.connected.value || !wallet.publicKey.value) {

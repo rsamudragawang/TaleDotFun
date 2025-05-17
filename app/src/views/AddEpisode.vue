@@ -222,7 +222,7 @@ import {
 import idlFromFile from '../anchor/tale_story.json';
 import idlFromFileNft from '../anchor/tale_nft' // Adjust path as necessary
 import taleNftIdl from '../anchor/tale_nft.json'; // Ensure this IDL is up-to-date
-import { useRouter } from 'vue-router';
+import { useRouter,useRoute } from 'vue-router';
 
 const router = useRouter();
 // --- Configuration ---
@@ -256,7 +256,7 @@ const appUser = ref(null);
 const selectedNft = ref(null)
 const taleId = ref('dc42a996-ccb2-4c95-b2c0-b8e5a9ba')
 const imageSet = ref(null)
-
+const route = useRoute();
 const categories = [
     { name: 'Fantasy', value: 'fantasy' },
     { name: 'Science Fiction', value: 'sci-fi' },
@@ -857,7 +857,7 @@ async function handleSaveEpisode(states) {
         let usedEpisodeIdSeed = uuidv4().substring(0, MAX_ONCHAIN_EPISODE_ID_SEED_LENGTH);
         // showUiMessage("Creating on-chain episode...", "info", 0);
         const [pda, _bump] = PublicKey.findProgramAddressSync(
-            [Buffer.from("episode"), new PublicKey(taleId.value).toBuffer(), Buffer.from(usedEpisodeIdSeed)],
+            [Buffer.from("episode"), new PublicKey(route.params.id).toBuffer(), Buffer.from(usedEpisodeIdSeed)],
             PROGRAM_ID
         );
         episodeOnChainPdaString = pda.toString();
@@ -866,7 +866,7 @@ async function handleSaveEpisode(states) {
         txSignature = await program.methods.createEpisode(...createArgs)
             .accounts({
                 episodeAccount: episodeOnChainPdaString,
-                parentTaleAccount: new PublicKey(taleId.value),
+                parentTaleAccount: new PublicKey(route.params.id),
                 author: wallet.publicKey.value,
                 systemProgram: SystemProgram.programId,
             }).rpc();
