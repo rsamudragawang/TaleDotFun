@@ -152,11 +152,11 @@ exports.updateUserAvatar = async (req, res, next) => {
 };
 
 // @desc    Get a user by wallet address
-// @route   GET /api/users/address/:walletAddress
+// @route   GET /api/wallet/address/:walletAddress
 // @access  Public
 exports.getUserByWalletAddress = async (req, res, next) => {
   try {
-    const user = await User.findOne({ walletAddress: req.params.walletAddress });
+    const user = await User.findOne({ walletAddress: req.params.id });
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
