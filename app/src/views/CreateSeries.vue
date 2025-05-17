@@ -33,7 +33,7 @@
                                     image for
                                     the this series. With resolution 1080x1080</p>
                                 <FileUpload class="mx-auto" name="squareThumbnail" accept="image/*"
-                                    :maxFileSize="1000000" @select="handleSquareThumbnailSelect"
+                                     @select="handleSquareThumbnailSelect"
                                     @remove="removeSquareThumbnail" :customUpload="true" :auto="true"
                                     :showUploadButton="false" :showCancelButton="false" chooseLabel="Select Image"
                                     invalidFileSizeMessage="File size must be less than 1MB">
@@ -64,7 +64,7 @@
                                     resolution 2040x1080
                                 </p>
                                 <FileUpload class="mx-auto" name="landscapeThumbnail" accept="image/*"
-                                    :maxFileSize="1000000" @select="handleLandscapeThumbnailSelect"
+                                     @select="handleLandscapeThumbnailSelect"
                                     @remove="removeLandscapeThumbnail" :customUpload="true" :auto="true"
                                     :showUploadButton="false" :showCancelButton="false" chooseLabel="Select Image"
                                     invalidFileSizeMessage="File size must be less than 1MB">
@@ -242,7 +242,7 @@
                                     image for
                                     the this series. With resolution 1080x1080</p>
                                 <FileUpload class="mx-auto" name="squareThumbnail" accept="image/*"
-                                    :maxFileSize="1000000" @select="handleSquareThumbnailSelect"
+                                     @select="handleSquareThumbnailSelect"
                                     @remove="removeSquareThumbnail" :customUpload="true" :auto="true"
                                     :showUploadButton="false" :showCancelButton="false" chooseLabel="Select Image"
                                     invalidFileSizeMessage="File size must be less than 1MB">
@@ -290,7 +290,7 @@
                                         uploaded.
                                     </p>
                                     <FileUpload class="mx-auto" name="chapterImages" accept="image/*"
-                                        :maxFileSize="1000000" :multiple="true" :maxFiles="24"
+                                         :multiple="true" :maxFiles="24"
                                         @select="handleChapterImagesSelect" @remove="removeChapterImage"
                                         :customUpload="true" :auto="true" :showUploadButton="false"
                                         :showCancelButton="false" chooseLabel="Select Images"

@@ -52,7 +52,7 @@
                 order they are
                 uploaded.
               </p>
-              <FileUpload class="mx-auto" name="chapterImages" accept="image/*" :maxFileSize="1000000" :multiple="true"
+              <FileUpload class="mx-auto" name="chapterImages" accept="image/*"  :multiple="true"
                 :maxFiles="24" @select="handleChapterImagesSelect" @remove="removeChapterImage" :customUpload="true"
                 :auto="true" :showUploadButton="false" :showCancelButton="false" chooseLabel="Select Images"
                 invalidFileSizeMessage="File size must be less than 1MB">

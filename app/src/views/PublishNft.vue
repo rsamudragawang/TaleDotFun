@@ -32,7 +32,7 @@
                         <div class="h-[400px] rounded-lg p-5 flex items-center justify-center"
                             style="background-color: rgba(0, 0, 0, .1);">
                             <FileUpload @select="handleImageFileChange" name="image" mode="basic" accept="image/*"
-                                :maxFileSize="1000000" class="w-full h-full">
+                                 class="w-full h-full">
                                 <template #empty>
                                     <span>Drag and drop files to here to upload.</span>
                                 </template>
