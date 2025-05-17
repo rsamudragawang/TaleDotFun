@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::{Token};
 
 // Ensure this matches the program ID you are deploying to and testing against
-declare_id!("4ezUiWjyURnQrsZKifJexyBEG3qUh8XyvevtVK3erN2i");
+declare_id!("DCbm8RfFi4CjuEm4r4yrZ7fxfz4Nug1fdXjcandt4nkk");
 
 #[program]
 pub mod tale_governance {
