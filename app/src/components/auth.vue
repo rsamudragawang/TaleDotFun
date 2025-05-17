@@ -73,6 +73,35 @@
         </button>
         <p class="form-text info-text">You'll be asked to sign a message to verify wallet ownership.</p>
       </div>
+
+      <!-- Registration Form -->
+      <div v-if="showRegistrationForm" class="w-full bg-purple-950/50 backdrop-blur-sm rounded-xl p-10 flex flex-col items-center">
+        <h2 class="text-2xl font-semibold mb-3">Complete Your Profile</h2>
+        <p class="text-gray-300 text-center max-w-md mb-8">
+          Welcome! Your wallet is verified. Please provide a display name to finish setting up your account.
+        </p>
+        <form @submit.prevent="handleCompleteRegistrationWithSignature" class="w-full max-w-md">
+          <div class="mb-4">
+            <label for="nameInput" class="block text-sm font-medium text-gray-300 mb-2">Your Name</label>
+            <input 
+              type="text" 
+              id="nameInput" 
+              v-model="name" 
+              class="w-full px-4 py-2 bg-purple-900/50 border border-purple-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent" 
+              placeholder="Enter your display name" 
+              required
+            >
+          </div>
+          <button 
+            type="submit" 
+            :disabled="isLoadingAuth" 
+            class="w-full btn btn-primary action-button"
+          >
+            {{ isLoadingAuth ? 'Completing Registration...' : 'Complete Registration' }}
+          </button>
+        </form>
+      </div>
+
       <!-- Published Series Tab -->
       <div v-if="isAuthenticated && activeTabs === 'series'">
         <h2 class="text-2xl font-bold mb-6 text-white">Your Published Series</h2>
@@ -295,7 +324,7 @@ const avatarUrl = computed(() => {
     const walletAddr = wallet.publicKey.value.toBase58();
     // If currentUser is not set, try to fetch
     if (!currentUser.value) {
-      fetch(`${AUTH_API_BASE_URL.replace(/\/api$/, '')}/api/users/wallet/${walletAddr}`)
+      fetch(`${AUTH_API_BASE_URL.replace(/\/api$/, '')}/api/wallet/address/${walletAddr}`)
         .then(res => res.json())
         .then(data => {
           if (data && data.success && data.data && data.data.avatar) {

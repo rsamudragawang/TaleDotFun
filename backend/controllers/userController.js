@@ -156,7 +156,7 @@ exports.updateUserAvatar = async (req, res, next) => {
 // @access  Public
 exports.getUserByWalletAddress = async (req, res, next) => {
   try {
-    const user = await User.findOne({ walletAddress: req.params.walletAddress });
+    const user = await User.findOne({ walletAddress: req.params.id });
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }

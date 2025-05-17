@@ -10,6 +10,7 @@ const designRoutes = require('./routes/designs');
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
 const taleRoutes = require('./routes/taleRoutes');
+const walletRoutes = require('./routes/walletRoutes');
 const { taleNestedEpisodeRouter, individualEpisodeRouter } = require('./routes/episodeRoutes'); // <--- ADD THIS
 const mintActivityRoutes = require('./routes/mintActivityRoutes'); // <-- IMPORT NEW ROUTES
 const ipfsRoutes = require('./routes/ipfsRoutes'); // Add this
@@ -92,6 +93,7 @@ mongoose.connection.on('disconnected', () => {
 });
 
 // Routes
+app.use('/api/wallet', walletRoutes);
 app.use('/api/nfts', nftRoutes);
 app.use('/api/designs', designRoutes); 
 app.use('/api/auth', authRoutes);     // <--- ADD THIS: Mount auth routes
