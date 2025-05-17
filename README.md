@@ -131,3 +131,11 @@ TaleDotFun/
 ## 📄 License
 
 This project is licensed under the [MIT License](LICENSE).
+
+## 🌐 Resources
+
+- 📑 [Pitch Deck](https://www.figma.com/deck/RDyLTHECExGjBHpoxvpaiY/Tale.Fun-Presentation?node-id=1-2492&t=9n0ztope42Yjl5n0-1)
+- 🎤 [Presentation Video](https://www.loom.com/share/0f35247e40c74bec8b2795173f36753b?sid=be198748-3a0c-4c07-881b-b652f7d185a2)
+- 🎬 [Demo Video](https://www.loom.com/share/d8bb693390eb405196937db93c371cc5?sid=0fc2e8d2-61e1-4e8d-b4a6-7b6b1cdbed29)
+- 🐦 [X (Twitter) Account](https://x.com/taledotfun)
+- 🌍 [Website](https://www.taledotfun.xyz/)
