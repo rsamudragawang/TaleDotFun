@@ -148,26 +148,29 @@
                                             <Button severity="secondary" @click="handleCreateNFT">Create
                                                 NFT</Button>
                                         </div>
-                                        <div v-else>
+                                        <div v-else class="grid grid-cols-12 gap-4">
                                             <div v-for="(nft, i) in listedNfts" :key="i"
-                                                class="col-span-3 rounded-lg mt-5"
-                                                style="background-color: rgba(0, 0, 0, 0.5);">
+                                                class="col-span-6 rounded-lg mt-5"
+                                                :class="selectedNft === nft.candyMachineAddress ? ['bg-gradient-to-b from-[#6435E9] to-[#381E83]'] : []">
                                                 <img :src="nft.image" alt="NFT Image"
-                                                    style="height:400px;width:100%;height:auto;object-fit:cover;">
+                                                    :class="selectedNft === nft.candyMachineAddress ? ['bg-gradient-to-b from-[#6435E9] to-[#381E83]'] : []"
+                                                    class="w-full h-[250px] mx-auto rounded-lg object-cover object-center
+                                                z-10 relative">
                                                 <div class="relative p-4">
                                                     <div class="mt-5">
                                                         <h1 class="text-lg">{{ nft.name }}</h1>
                                                         <div class="flex gap-4 py-4 justify-between items-center">
                                                             <div class="flex gap-2 items-center">
-                                                                <img src="/public/icons/solana.svg" alt="solana" w->
+                                                                <img src="/public/icons/solana.svg" alt="solana">
                                                                 <p class="text-slate-400">{{ nft.price ?
                                                                     nft.price.toLocaleString(undefined, {
-                                                                    maximumFractionDigits: 3 }) : '-' }} SOL</p>
+                                                                        maximumFractionDigits: 3
+                                                                    }) : '-' }} SOL</p>
                                                             </div>
                                                             <div class="flex gap-2 items-center">
                                                                 <i class="pi pi-user"></i>
                                                                 <p class="text-slate-400">{{ nft.itemsRemaining || 0
-                                                                    }}/{{ nft.itemsAvailable || 0
+                                                                }}/{{ nft.itemsAvailable || 0
                                                                     }}</p>
                                                             </div>
                                                         </div>
@@ -181,7 +184,8 @@
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                        <Button class="w-full mt-4" severity="secondary"
+                                                        <Button class="w-full mt-4"
+                                                            :severity="selectedNft === nft.candyMachineAddress ? 'secondary' : 'primary'"
                                                             :loading="nft.isMinting"
                                                             :disabled="!nft.itemsRemaining || nft.isMinting || !wallet.connected.value"
                                                             @click="handleSelect(nft, i)">
@@ -192,7 +196,13 @@
                                             </div>
                                         </div>
                                     </div>
-                                    <div class="form-group checkbox-group">
+                                    <div>
+                                        <p class="mt-4 text-white">Select Exclusive Perks for NFT Owners</p>
+                                        <p class="text-slate-400 mt-2">Select the perks that you want to offer to NFT
+                                            owners
+                                        </p>
+                                    </div>
+                                    <div class="form-group checkbox-group flex flex-col gap-4">
                                         <label class="form-label checkbox-label">
                                             <input type="checkbox" v-model="OptionsNft.isGovernanceTokenGated"
                                                 class="form-checkbox" />
@@ -335,12 +345,11 @@
                                                 <Button severity="secondary" @click="handleCreateNFT">Create
                                                     NFT</Button>
                                             </div>
-                                            <div v-else>
+                                            <div v-else class="grid grid-cols-12 gap-4">
                                                 <div v-for="(nft, i) in listedNfts" :key="i"
-                                                    class="col-span-3 rounded-lg mt-5"
-                                                    style="background-color: rgba(0, 0, 0, 0.5);">
+                                                    class="col-span-6 rounded-lg mt-5" :class="{}">
                                                     <img :src="nft.image" alt="NFT Image"
-                                                        style="height:400px;width:100%;height:auto;object-fit:cover;">
+                                                        class="w-full h-[250px] mx-auto rounded-lg object-cover object-center z-10 relative">
                                                     <div class="relative p-4">
                                                         <div class="mt-5">
                                                             <h1 class="text-lg">{{ nft.name }}</h1>
@@ -349,14 +358,14 @@
                                                                     <img src="/public/icons/solana.svg" alt="solana" w->
                                                                     <p class="text-slate-400">{{ nft.price ?
                                                                         nft.price.toLocaleString(undefined, {
-                                                                        maximumFractionDigits: 3
+                                                                            maximumFractionDigits: 3
                                                                         }) : '-' }} SOL</p>
                                                                 </div>
                                                                 <div class="flex gap-2 items-center">
                                                                     <i class="pi pi-user"></i>
                                                                     <p class="text-slate-400">{{ nft.itemsRemaining || 0
-                                                                        }}/{{
-                                                                        nft.itemsAvailable || 0 }}</p>
+                                                                    }}/{{
+                                                                            nft.itemsAvailable || 0 }}</p>
                                                                 </div>
                                                             </div>
                                                             <div class="pt-4 mt-6 border-t border-white">
@@ -370,7 +379,8 @@
                                                                     </div>
                                                                 </div>
                                                             </div>
-                                                            <Button class="w-full mt-4" severity="secondary"
+                                                            <Button class="w-full mt-4"
+                                                                :severity="selectedNft === nft.candyMachineAddress ? 'secondary' : 'primary'"
                                                                 :loading="nft.isMinting"
                                                                 :disabled="!nft.itemsRemaining || nft.isMinting || !wallet.connected.value"
                                                                 @click="handleSelect(nft, i)">
@@ -546,10 +556,15 @@ const OptionsNft = ({
 })
 
 function getMintButtonText(nft) {
+
     if (!wallet.connected.value) return 'Connect Wallet to Mint';
     if (!nft.itemsRemaining) return 'Sold Out';
     if (nft.isMinting) return 'Minting...';
+    if (selectedNft.value === nft.candyMachineAddress) {
+        return 'Unselect NFTs'
+    }
     return 'Select';
+
 }
 
 const initialValues = ref({
@@ -639,7 +654,11 @@ authApiClient.interceptors.response.use(
     }
 );
 async function handleSelect(nft, index) {
-    selectedNft.value = nft.candyMachineAddress
+    if (selectedNft.value === nft.candyMachineAddress) {
+        selectedNft.value = null
+    } else {
+        selectedNft.value = nft.candyMachineAddress
+    }
 
 }
 
